@@ -5,6 +5,8 @@ Never fails the hook: any error is swallowed so Claude carries on.
 
 import json
 import os
+import platform
+import shutil
 import subprocess
 import sys
 
@@ -34,6 +36,30 @@ def register(h: dict) -> dict:
     return call_or_start({"op": "register_session", "session_id": h["session_id"], "pid": claude_pid(),
                           "project": project_of(h.get("cwd") or os.getcwd()),
                           "transcript_path": h.get("transcript_path", "")})
+
+
+def ensure_board():
+    """Windows has no i3 exec: start the Board (and its tray Glance) if none answers. Needs taskviewer-board."""
+    try:
+        from taskviewer_board.control import send
+    except ImportError:
+        return
+    if not send("ping"):
+        subprocess.Popen(["taskviewer-boardw"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL,
+                         creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP)
+
+
+def in_wsl() -> bool:
+    return sys.platform == "linux" and "microsoft" in platform.release().lower()
+
+
+def ensure_windows_board():
+    """From WSL: launch the Windows Board through interop. It can't ping the Windows pipe, so always launch;
+    a second Board exits by itself."""
+    if exe := shutil.which("taskviewer-boardw.exe"):
+        subprocess.Popen([exe], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True)
 
 
 def start_note(result: dict) -> str:
@@ -71,6 +97,10 @@ def handle(event: str, h: dict):
             reply = register(h)
             if reply.get("ok"):
                 context("SessionStart", start_note(reply["result"]))
+            if sys.platform == "win32":
+                ensure_board()
+            elif in_wsl():
+                ensure_windows_board()
         case "prompt":
             msg = {"op": "prompt_submitted", "session_id": sid}
             reply = call_or_start(msg)

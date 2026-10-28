@@ -104,3 +104,33 @@ def test_mcp_follows_clear(app, tools):
     hook("session-start", session_id="s2", source="clear")
     assert "no tree" in pytest.raises(RuntimeError, tools.get_tree).value.args[0]
     assert tools.list_candidates() == "t1 [dormant] first"
+
+
+@pytest.mark.parametrize("running", [True, False])
+def test_ensure_board_starts_only_when_silent(monkeypatch, running):
+    import subprocess
+
+    import taskviewer_board.control as control
+    from taskviewer_plugin import hook as h
+
+    launched = []
+    monkeypatch.setattr(control, "send", lambda cmd: running)
+    monkeypatch.setattr(subprocess, "Popen", lambda cmd, **kw: launched.append(cmd))
+    monkeypatch.setattr(subprocess, "DETACHED_PROCESS", 8, raising=False)
+    monkeypatch.setattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 512, raising=False)
+    h.ensure_board()
+    assert launched == ([] if running else [["taskviewer-boardw"]])
+
+
+@pytest.mark.parametrize("exe", ["/mnt/c/Users/me/.local/bin/taskviewer-boardw.exe", None])
+def test_wsl_launches_windows_board_if_on_path(monkeypatch, exe):
+    import shutil
+    import subprocess
+
+    from taskviewer_plugin import hook as h
+
+    launched = []
+    monkeypatch.setattr(shutil, "which", lambda name: exe)
+    monkeypatch.setattr(subprocess, "Popen", lambda cmd, **kw: launched.append(cmd))
+    h.ensure_windows_board()
+    assert launched == ([[exe]] if exe else [])
