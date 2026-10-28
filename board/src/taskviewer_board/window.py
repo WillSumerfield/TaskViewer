@@ -41,6 +41,7 @@ class Rows(QWidget):
     def __init__(self, font_size: int):
         super().__init__()
         self.rows: list[Row] = []
+        self.ys: list[int] = []
         self._drag: QPoint | None = None
         self.set_font_size(font_size)
 
@@ -62,14 +63,19 @@ class Rows(QWidget):
 
     def set_rows(self, rows: list[Row]):
         self.rows = rows
-        self.setFixedHeight(2 * PAD + len(rows) * self.lh)
+        self.ys = []  # top of each row; Project headers after the first get a small gap above
+        y = PAD
+        for i, r in enumerate(rows):
+            y += self.lh // 3 if r.kind == "project" and i else 0
+            self.ys.append(y)
+            y += self.lh
+        self.setFixedHeight(y + PAD)
         self.update()
 
     def paintEvent(self, _):
         qp = QPainter(self)
         w = self.width() - 2 * PAD
-        for i, r in enumerate(self.rows):
-            y = PAD + i * self.lh
+        for y, r in zip(self.ys, self.rows):
             box = lambda x, width: QRect(x, y, width, self.lh)
             if r.kind == "project":
                 qp.setFont(self.font_)
