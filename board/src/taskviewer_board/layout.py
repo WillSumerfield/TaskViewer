@@ -1,12 +1,14 @@
 """Qt-free Board rules: snapshot -> rows to paint."""
 
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 import taskviewer_protocol as p
 
 STATUS_ICON = {"planned": "○", "active": "●", "done": "✓", "blocked": "⧖", "dropped": "✗"}
-ACTIVITY_ICON = {"working": "▶", "idle": "◦", "awaiting": "⚠"}
+# Windows draws ▶ as a colour emoji; ▸ has no emoji form
+ACTIVITY_ICON = {"working": "▸" if sys.platform == "win32" else "▶", "idle": "◦", "awaiting": "⚠"}
 AWAIT = ACTIVITY_ICON["awaiting"]
 DORMANT = "◌ Dormant"
 
