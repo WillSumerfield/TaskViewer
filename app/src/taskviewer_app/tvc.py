@@ -1,6 +1,6 @@
 """Test CLI: send one op to the App and print the reply.
 
-  tvc <op> key=value ...     values parsed as JSON when possible (e.g. awaiting=true)
+  tvc <op> key=value ...     values parsed as JSON when possible (e.g. index=0)
   tvc subscribe [topic ...]  print pushed events until Ctrl-C
   tvc fake-session <id> [project]   register a Session using this shell's pid
 
@@ -21,7 +21,6 @@ from pathlib import Path
 
 import psutil
 
-from .liveness import process_start
 from .storage import Storage, default_dir
 
 
@@ -53,8 +52,7 @@ def main():
             proc = proc.parent()
         pid = proc.pid
         msg = {"op": "register_session", "session_id": a.args[0], "pid": pid,
-               "pid_start": process_start(pid), "project": a.args[1] if len(a.args) > 1 else os.getcwd(),
-               "title": f"fake {a.args[0]}"}
+               "project": a.args[1] if len(a.args) > 1 else os.getcwd(), "title": f"fake {a.args[0]}"}
     elif a.op == "subscribe":
         msg = {"op": "subscribe", "topics": a.args or ["glance", "state"]}
     else:

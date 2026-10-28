@@ -9,5 +9,13 @@ def process_start(pid: int) -> float:
 def is_alive(pid: int, pid_start: float) -> bool:
     try:
         return abs(psutil.Process(pid).create_time() - pid_start) < 1.0
-    except (psutil.NoSuchProcess, psutil.AccessDenied):
+    except psutil.Error:
         return False
+
+
+def ancestors(pid: int) -> list[int]:
+    """Parent pids of a process, nearest first."""
+    try:
+        return [p.pid for p in psutil.Process(pid).parents()]
+    except psutil.Error:
+        return []

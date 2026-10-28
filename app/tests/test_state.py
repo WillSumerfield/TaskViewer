@@ -3,7 +3,7 @@ import pytest
 import taskviewer_protocol as p
 from taskviewer_app.state import OpError
 
-from conftest import add, make_tree, register
+from app_helpers import add, make_tree, register
 
 
 def ids(view: p.TaskView) -> list[str]:
@@ -168,5 +168,5 @@ def test_glance_counts(state):
     register(state, "s2")
     r = make_tree(state, "s1")
     add(state, r, status="blocked")
-    state.apply(p.SetAwaiting(session_id="s2", awaiting=True))
+    state.apply(p.SetActivity(session_id="s2", activity="awaiting"))
     assert state.glance() == p.Glance(live=2, awaiting=1, blocked=1)

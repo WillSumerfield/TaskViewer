@@ -12,6 +12,7 @@ from .state import Session, State, Tree
 class SessionsFile(msgspec.Struct):
     next_id: int
     sessions: list[Session]
+    last_tree: dict[str, str] = {}
 
 
 def default_dir() -> Path:
@@ -36,7 +37,7 @@ class Storage:
         trees = [msgspec.json.decode(f.read_bytes(), type=Tree) for f in self.trees_dir.glob("*.json")]
         sf = self.root / "sessions.json"
         s = msgspec.json.decode(sf.read_bytes(), type=SessionsFile) if sf.exists() else SessionsFile(1, [])
-        state.load(trees, s.sessions, s.next_id)
+        state.load(trees, s.sessions, s.next_id, s.last_tree)
 
     def flush(self, state: State):
         for tid in state.dirty_trees:
@@ -45,7 +46,7 @@ class Storage:
             (self.trees_dir / f"{tid}.json").unlink(missing_ok=True)
         if state.sessions_dirty:
             _write(self.root / "sessions.json",
-                   msgspec.json.encode(SessionsFile(state.next_id, list(state.sessions.values()))))
+                   msgspec.json.encode(SessionsFile(state.next_id, list(state.sessions.values()), state.last_tree)))
         state.dirty_trees.clear()
         state.deleted_trees.clear()
         state.sessions_dirty = False

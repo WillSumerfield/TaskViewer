@@ -7,9 +7,14 @@ import msgspec
 
 import taskviewer_protocol as p
 
+from .liveness import ancestors, process_start
+
 DORMANT_SECS = 8 * 3600
 HIDDEN_SECS = 30 * 24 * 3600
 FINISHED = ("done", "dropped")
+STALE_TURNS = 5  # working turns without a tree change before reminding
+MAX_CANDIDATES = 10
+_LC_ORDER = {"live": 0, "dormant": 1, "hidden": 2}
 
 
 class OpError(Exception):
@@ -37,16 +42,28 @@ class Session(msgspec.Struct, kw_only=True):
     pid: int
     pid_start: float
     project: str
+    transcript_path: str = ""
     title: str = ""
-    awaiting: bool = False
+    activity: p.Activity = "idle"  # until the first prompt
     tree_id: str | None = None
+    # turn bookkeeping (stale-tree reminder, set_awaiting)
+    ask_pending: bool = False
+    used_tools: bool = False
+    touched: bool = False
+    stale_turns: int = 0
 
 
 class State:
-    def __init__(self, clock: Callable[[], float] = time.time):
+    def __init__(self, clock: Callable[[], float] = time.time,
+                 proc_start: Callable[[int], float] = process_start,
+                 ancestors: Callable[[int], list[int]] = ancestors):
         self.clock = clock
+        self.proc_start = proc_start
+        self.ancestors = ancestors
         self.trees: dict[str, Tree] = {}
         self.sessions: dict[str, Session] = {}
+        self.pid_session: dict[int, str] = {}  # pid -> most recent Session it registered
+        self.last_tree: dict[str, str] = {}  # ended Session id -> its tree (for resume)
         self.task_tree: dict[str, str] = {}  # task id -> tree id
         self.next_id = 1
         # Change tracking for storage
@@ -57,9 +74,12 @@ class State:
 
     # ---- loading ----
 
-    def load(self, trees: list[Tree], sessions: list[Session], next_id: int):
+    def load(self, trees: list[Tree], sessions: list[Session], next_id: int,
+             last_tree: dict[str, str] | None = None):
         self.trees = {t.id: t for t in sorted(trees, key=lambda t: int(t.id[1:]))}
         self.sessions = {s.id: s for s in sessions}
+        self.pid_session = {s.pid: s.id for s in sessions}  # saved in registration order
+        self.last_tree = dict(last_tree or {})
         self.task_tree = {tid: t.id for t in trees for tid in t.tasks}
         self.next_id = next_id
         self._last_lifecycle = {t.id: self.lifecycle(t) for t in trees}
@@ -70,6 +90,17 @@ class State:
         if sid not in self.sessions:
             raise OpError(f"unknown session {sid}")
         return self.sessions[sid]
+
+    def _who(self, req: p.Who) -> Session:
+        if req.session_id is not None:
+            return self._session(req.session_id)
+        if req.pid is None:
+            raise OpError("give session_id or pid")
+        for pid in [req.pid, *self.ancestors(req.pid)]:
+            sid = self.pid_session.get(pid)
+            if sid in self.sessions:
+                return self.sessions[sid]
+        raise OpError("no Session for this process (is the TaskViewer hook installed?)")
 
     def _tree(self, tree_id: str) -> Tree:
         if tree_id not in self.trees:
@@ -120,6 +151,7 @@ class State:
         tree.sessions.append(s.id)
         tree.last_left_at = None
         s.tree_id = tree.id
+        s.touched = True
         self.sessions_dirty = True
         self.dirty_trees.add(tree.id)
 
@@ -131,6 +163,8 @@ class State:
         for tid in tree.tasks:
             del self.task_tree[tid]
         del self.trees[tree.id]
+        self.last_tree = {k: v for k, v in self.last_tree.items() if v != tree.id}
+        self.sessions_dirty = True
         self._last_lifecycle.pop(tree.id, None)
         self.dirty_trees.discard(tree.id)
         self.deleted_trees.add(tree.id)
@@ -142,19 +176,38 @@ class State:
         warnings: list[str] = []
         match req:
             case p.RegisterSession():
-                old = self.sessions.get(req.session_id)
-                self.sessions[req.session_id] = Session(
-                    id=req.session_id, pid=req.pid, pid_start=req.pid_start,
-                    project=req.project, title=req.title,
-                    tree_id=old.tree_id if old else None,
-                )
-                self.sessions_dirty = True
-                return None, warnings
+                return self._register(req), warnings
             case p.EndSession():
                 self.end_session(req.session_id)
                 return None, warnings
+            case p.SetActivity():
+                self._session(req.session_id).activity = req.activity
+                self.sessions_dirty = True
+                return None, warnings
             case p.SetAwaiting():
-                self._session(req.session_id).awaiting = req.awaiting
+                self._who(req).ask_pending = True
+                return None, warnings
+            case p.PromptSubmitted():
+                s = self._session(req.session_id)
+                s.activity, s.ask_pending = "working", False
+                remind = s.stale_turns >= STALE_TURNS
+                if remind:
+                    s.stale_turns = 0
+                self.sessions_dirty = True
+                return {"remind": remind, "tree_id": s.tree_id}, warnings
+            case p.ToolUsed():
+                s = self._session(req.session_id)
+                s.used_tools = True
+                if s.activity != "working":
+                    s.activity = "working"
+                    self.sessions_dirty = True
+                return None, warnings
+            case p.TurnEnded():
+                s = self._session(req.session_id)
+                if s.used_tools:
+                    s.stale_turns = 0 if s.touched else s.stale_turns + 1
+                s.used_tools = s.touched = False
+                s.activity = "awaiting" if s.ask_pending else "idle"
                 self.sessions_dirty = True
                 return None, warnings
             case p.SetTitle():
@@ -162,7 +215,7 @@ class State:
                 self.sessions_dirty = True
                 return None, warnings
             case p.CreateTree():
-                s = self._session(req.session_id)
+                s = self._who(req)
                 rid = self._new_id()
                 tree = Tree(id=rid, project=s.project,
                             tasks={rid: Task(id=rid, goal=req.goal, status="active", parent=None)})
@@ -171,28 +224,28 @@ class State:
                 self._attach(s, tree)
                 return {"tree_id": rid}, warnings
             case p.Attach():
-                s = self._session(req.session_id)
+                s = self._who(req)
                 tree = self._tree(req.tree_id)
                 if tree.project != s.project:
                     raise OpError(f"tree {tree.id} belongs to project {tree.project}")
                 self._attach(s, tree)
                 return None, warnings
             case p.Detach():
-                self._detach(self._session(req.session_id))
+                self._detach(self._who(req))
                 return None, warnings
             case p.ListCandidates():
-                return [p.Candidate(tree_id=t.id, goal=t.tasks[t.id].goal, lifecycle=self.lifecycle(t))
-                        for t in self.trees.values() if t.project == req.project], warnings
+                if req.project is not None:
+                    return self._candidates(req.project), warnings
+                s = self._who(req)
+                return self._candidates(s.project, exclude=s.tree_id), warnings
             case p.GetTree():
                 if req.tree_id:
                     tree = self._tree(req.tree_id)
-                elif req.session_id:
-                    s = self._session(req.session_id)
+                else:
+                    s = self._who(req)
                     if s.tree_id is None:
                         raise OpError(f"session {s.id} has no tree")
                     tree = self.trees[s.tree_id]
-                else:
-                    raise OpError("give session_id or tree_id")
                 return self.tree_view(tree), warnings
             case p.AddTask():
                 tree, parent = self._task(req.parent_id)
@@ -200,19 +253,19 @@ class State:
                 tree.tasks[tid] = Task(id=tid, goal=req.goal, status=req.status, parent=parent.id)
                 parent.children.append(tid)
                 self.task_tree[tid] = tree.id
-                self.dirty_trees.add(tree.id)
+                self._touch(tree)
                 warnings += self._status_warnings(tree, tree.tasks[tid])
                 return {"task_id": tid}, warnings
             case p.SetStatus():
                 tree, task = self._task(req.task_id)
                 task.status = req.status
-                self.dirty_trees.add(tree.id)
+                self._touch(tree)
                 warnings += self._status_warnings(tree, task)
                 return None, warnings
             case p.RenameTask():
                 tree, task = self._task(req.task_id)
                 task.goal = req.goal
-                self.dirty_trees.add(tree.id)
+                self._touch(tree)
                 return None, warnings
             case p.MoveTask():
                 self._move(req)
@@ -226,16 +279,56 @@ class State:
                     del tree.tasks[tid]
                     del self.task_tree[tid]
                 tree.tasks[task.parent].children.remove(task.id)
-                self.dirty_trees.add(tree.id)
+                self._touch(tree)
                 return None, warnings
             case p.Snapshot():
                 return self.snapshot(), warnings
         raise OpError(f"unsupported op {type(req).__name__}")
 
+    def _touch(self, tree: Tree):
+        """A tree changed: save it, and reset the stale count of its Sessions."""
+        self.dirty_trees.add(tree.id)
+        for sid in tree.sessions:
+            self.sessions[sid].touched = True
+
+    def _register(self, req: p.RegisterSession) -> dict:
+        old = self.sessions.get(req.session_id)
+        if req.pid_start is not None:
+            start = req.pid_start
+        else:
+            try:
+                start = self.proc_start(req.pid)
+            except Exception:
+                raise OpError(f"no process {req.pid}")
+        # one claude process runs one Session at a time (/clear starts a new one)
+        for other in [o for o in self.sessions.values() if o.pid == req.pid and o.id != req.session_id]:
+            self.end_session(other.id)
+        s = Session(id=req.session_id, pid=req.pid, pid_start=start, project=req.project,
+                    transcript_path=req.transcript_path,
+                    title=req.title or (old.title if old else ""),
+                    tree_id=old.tree_id if old else None)
+        self.sessions[s.id] = s
+        self.pid_session[s.pid] = s.id
+        self.sessions_dirty = True
+        last = self.trees.get(self.last_tree.pop(s.id, ""))
+        if s.tree_id is None and last is not None and last.project == s.project:
+            self._attach(s, last)  # resumed Session returns to its tree
+        return {"tree_id": s.tree_id, "candidates": self._candidates(s.project, exclude=s.tree_id)}
+
+    def _candidates(self, project: str, exclude: str | None = None) -> list[p.Candidate]:
+        trees = [t for t in self.trees.values() if t.project == project and t.id != exclude]
+        trees.sort(key=lambda t: (_LC_ORDER[self.lifecycle(t)], -(t.last_left_at or 0), -int(t.id[1:])))
+        return [p.Candidate(tree_id=t.id, goal=t.tasks[t.id].goal, lifecycle=self.lifecycle(t))
+                for t in trees[:MAX_CANDIDATES]]
+
     def end_session(self, sid: str):
         s = self._session(sid)
+        if s.tree_id is not None:
+            self.last_tree[sid] = s.tree_id
         self._detach(s)
         del self.sessions[sid]
+        if self.pid_session.get(s.pid) == sid:
+            del self.pid_session[s.pid]
         self.sessions_dirty = True
 
     def _move(self, req: p.MoveTask):
@@ -251,7 +344,7 @@ class State:
         kids = new_parent.children
         kids.insert(len(kids) if req.index is None else req.index, task.id)
         task.parent = new_parent.id
-        self.dirty_trees.add(tree.id)
+        self._touch(tree)
 
     def _subtree(self, tree: Tree, tid: str) -> list[str]:
         out, stack = [], [tid]
@@ -313,13 +406,13 @@ class State:
         return p.SnapshotView(
             trees=[self.tree_view(t) for t in self.visible_trees()],
             sessions=[p.SessionView(id=s.id, project=s.project, title=s.title,
-                                    awaiting=s.awaiting, tree_id=s.tree_id)
+                                    activity=s.activity, tree_id=s.tree_id)
                       for s in self.sessions.values()],
         )
 
     def glance(self) -> p.Glance:
         return p.Glance(
             live=len(self.sessions),
-            awaiting=sum(s.awaiting for s in self.sessions.values()),
+            awaiting=sum(s.activity == "awaiting" for s in self.sessions.values()),
             blocked=sum(t.status == "blocked" for tr in self.visible_trees() for t in tr.tasks.values()),
         )

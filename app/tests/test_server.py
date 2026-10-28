@@ -64,7 +64,7 @@ def test_end_to_end(tmp_path):
 
         # reads don't push
         await c.call("snapshot")
-        await c.call("set_awaiting", session_id="s1", awaiting=True)
+        await c.call("set_activity", session_id="s1", activity="awaiting")
         assert (await sub.next())["glance"]["awaiting"] == 1
 
         assert (tmp_path / "trees" / f"{tree}.json").exists()

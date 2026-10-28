@@ -1,7 +1,7 @@
 import taskviewer_protocol as p
 from taskviewer_app.state import DORMANT_SECS, HIDDEN_SECS
 
-from conftest import make_tree, register
+from app_helpers import make_tree, register
 
 HOUR = 3600
 
