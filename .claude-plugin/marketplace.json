@@ -1,0 +1,13 @@
+{
+  "name": "taskviewer",
+  "owner": {
+    "name": "Will"
+  },
+  "plugins": [
+    {
+      "name": "taskviewer",
+      "source": "./plugin/claude-plugin",
+      "description": "Keep a live Task tree of each Session's goals, shown in the TaskViewer App"
+    }
+  ]
+}

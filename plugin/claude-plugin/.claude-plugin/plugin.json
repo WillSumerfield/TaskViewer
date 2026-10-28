@@ -1,0 +1,5 @@
+{
+  "name": "taskviewer",
+  "version": "0.1.0",
+  "description": "Keep a live Task tree of each Session's goals, shown in the TaskViewer App"
+}

@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "taskviewer": {
+      "command": "taskviewer-mcp"
+    }
+  }
+}
