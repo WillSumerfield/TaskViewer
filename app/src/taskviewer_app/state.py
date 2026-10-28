@@ -414,5 +414,6 @@ class State:
         return p.Glance(
             live=len(self.sessions),
             awaiting=sum(s.activity == "awaiting" for s in self.sessions.values()),
-            blocked=sum(t.status == "blocked" for tr in self.visible_trees() for t in tr.tasks.values()),
+            blocked=sum(t.status == "blocked" for tr in self.visible_trees() if self.lifecycle(tr) == "live"
+                        for t in tr.tasks.values()),  # Dormant trees don't nag
         )

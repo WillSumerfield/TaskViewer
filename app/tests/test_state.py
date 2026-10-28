@@ -170,3 +170,7 @@ def test_glance_counts(state):
     add(state, r, status="blocked")
     state.apply(p.SetActivity(session_id="s2", activity="awaiting"))
     assert state.glance() == p.Glance(live=2, awaiting=1, blocked=1)
+    add(state, add(state, r), status="blocked")  # any depth counts
+    assert state.glance().blocked == 2
+    make_tree(state, "s1")  # r goes Dormant: its Blocked Tasks stop counting
+    assert state.glance() == p.Glance(live=2, awaiting=1, blocked=0)
