@@ -89,3 +89,20 @@ def test_sweep_pushes_dead_session(tmp_path):
         await server.stop()
 
     asyncio.run(go())
+
+
+def test_one_app_per_state_dir(tmp_path):
+    """Many launches at once (login) leave exactly one App running."""
+    import subprocess
+    import sys
+    import time
+
+    cmd = [sys.executable, "-c", "import sys; from taskviewer_app.main import main; sys.argv[1:] = "
+           f"['--state-dir', {str(tmp_path)!r}]; main()"]
+    procs = [subprocess.Popen(cmd, stdout=subprocess.DEVNULL) for _ in range(6)]
+    try:
+        time.sleep(3)
+        assert sum(p.poll() is None for p in procs) == 1
+    finally:
+        for p in procs:
+            p.kill()

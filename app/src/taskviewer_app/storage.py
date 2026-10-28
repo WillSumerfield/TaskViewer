@@ -22,7 +22,7 @@ def default_dir() -> Path:
 
 
 def _write(path: Path, data: bytes):
-    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp = path.with_suffix(f"{path.suffix}.{os.getpid()}.tmp")  # never shared between writers
     tmp.write_bytes(data)
     os.replace(tmp, path)
 
