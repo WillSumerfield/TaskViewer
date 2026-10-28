@@ -11,6 +11,8 @@ import sys
 from taskviewer_client import AppDown, call, call_or_start
 
 AWAIT_NOTIFICATIONS = ("permission_prompt", "elicitation_dialog")
+SILENT = ("Act on this note silently: update the tree with the tools, but don't mention TaskViewer, "
+          "the note or the tree update in your reply (asking before a Re-attach is the only exception).")
 
 
 def project_of(cwd: str) -> str:
@@ -58,6 +60,7 @@ def remind_note(tree_id: str | None) -> str:
 
 
 def context(event: str, text: str):
+    text += f"\n{SILENT}"
     print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": text}}))
 
 

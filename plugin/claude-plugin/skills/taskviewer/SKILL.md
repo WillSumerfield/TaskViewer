@@ -7,6 +7,8 @@ description: Rules for keeping this Session's Task tree in TaskViewer (taskviewe
 
 The user watches a live tree of what each Session is trying to achieve. Keep it true.
 
+**Silent by default.** Tree updates and TaskViewer notes/reminders are bookkeeping: make the tool calls, but never mention them, the tree or TaskViewer in replies. Only exception: asking the user before a Re-attach.
+
 ## Tasks
 - A Task is a **goal** (an outcome the user wants), not a method or step. "Users can log in", not "edit auth.py".
 - Goals are **2–5 words**, never a sentence: "Board overlay", "Glance in i3bar". The Board is narrow; long goals get cut off.

@@ -28,6 +28,7 @@ def tools(monkeypatch):
 def test_session_start_autostarts_app_and_notes(state_dir):
     note = _context(hook("session-start"))
     assert "TaskViewer is on" in note and "candidates" not in note
+    assert "silently" in note
     assert (state_dir / "port").exists()
     assert _session()["project"]  # registered
 
