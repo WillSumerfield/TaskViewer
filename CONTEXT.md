@@ -55,14 +55,10 @@ _Avoid_: Cancelled, removed
 **Live**:
 A Task tree with at least one active Session working on it. A tree may have many Sessions; Sessions attach to the tree as a whole, not to individual Tasks. A Session works on at most one tree at a time.
 
-**Dormant**:
-A Task tree whose last Session has left; still visible, awaiting re-attachment. Lasts 8 hours from when the last Session left.
-_Avoid_: Stale, inactive, paused
-
 **Hidden**:
-A Task tree past its Dormant period; not shown, but still findable by new Sessions. Permanently deleted after 1 month Hidden.
-_Avoid_: Archived
+A Task tree whose last Session has left; not shown, but still findable by new Sessions. Permanently deleted after 1 month Hidden.
+_Avoid_: Archived, Dormant, stale
 
 **Re-attach**:
-A Session claiming an existing Dormant or Hidden Task tree as the one it is working on, after confirming with the user. A resumed Session returns to its previous tree without asking.
+A Session claiming an existing Hidden Task tree as the one it is working on, after confirming with the user. A resumed Session returns to its previous tree without asking.
 _Avoid_: Resume

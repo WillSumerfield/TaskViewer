@@ -77,7 +77,7 @@ def attach(tree_id: str) -> str:
 
 @mcp.tool()
 def detach() -> str:
-    """Stop working on the current tree (it becomes Dormant if no other Session is on it)."""
+    """Stop working on the current tree (it becomes Hidden if no other Session is on it)."""
     _, w = _send(p.Detach(pid=PID))
     return _out("detached", w)
 

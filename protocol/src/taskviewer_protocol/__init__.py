@@ -5,7 +5,7 @@ from typing import Any, Literal
 import msgspec
 
 Status = Literal["planned", "active", "done", "blocked", "dropped"]
-Lifecycle = Literal["live", "dormant", "hidden"]
+Lifecycle = Literal["live", "hidden"]
 Topic = Literal["glance", "state"]
 Activity = Literal["working", "idle", "awaiting"]
 

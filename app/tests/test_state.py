@@ -117,7 +117,7 @@ def test_one_tree_per_session(state, clock):
     r2 = make_tree(state, goal="two")
     assert state.sessions["s1"].tree_id == r2
     assert state.trees[r1].sessions == []
-    assert state.lifecycle(state.trees[r1]) == "dormant"
+    assert state.lifecycle(state.trees[r1]) == "hidden"
 
 
 def test_multi_session_tree(state):
@@ -172,5 +172,5 @@ def test_glance_counts(state):
     assert state.glance() == p.Glance(live=2, awaiting=1, blocked=1)
     add(state, add(state, r), status="blocked")  # any depth counts
     assert state.glance().blocked == 2
-    make_tree(state, "s1")  # r goes Dormant: its Blocked Tasks stop counting
+    make_tree(state, "s1")  # r goes Hidden: its Blocked Tasks stop counting
     assert state.glance() == p.Glance(live=2, awaiting=1, blocked=0)

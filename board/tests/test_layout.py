@@ -1,5 +1,5 @@
 import taskviewer_protocol as p
-from taskviewer_board.layout import AWAIT, DORMANT, layout, project_names
+from taskviewer_board.layout import AWAIT, layout, project_names
 
 HOME = "/home/u"
 
@@ -30,14 +30,14 @@ def test_expanded_order_and_tags():
     snap = p.SnapshotView(
         trees=[tree("t10", "/home/u/zed", task("Z")),
                tree("t9", "/home/u/abc", task("Later", "active", task("sub", "done", task("deep")))),
-               tree("t2", "/home/u/abc", task("Old"), "dormant")],
+               tree("t2", "/home/u/abc", task("Old"))],
         sessions=[sess("s1", "/home/u/abc", "t9", "awaiting"), sess("s2", "/home/u/abc", "t9", "working")],
     )
     rows = layout(snap, False, HOME)
     assert (rows[2].icon, rows[2].style) == (AWAIT, "awaiting")  # ⚠ replaces the status icon
     assert texts(rows) == [
         ("project", "abc", 0, ""),
-        ("task", "Old", 0, DORMANT),  # by creation: t2 before t9 (numeric)
+        ("task", "Old", 0, ""),  # by creation: t2 before t9 (numeric)
         ("task", "Later", 0, ""),
         ("task", "sub", 1, ""),
         ("task", "deep", 2, ""),

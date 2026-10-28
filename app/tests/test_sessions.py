@@ -27,7 +27,7 @@ def test_clear_starts_fresh_session_on_same_pid(state):
     assert [c.tree_id for c in result["candidates"]] == [r]
     state.apply(p.CreateTree(pid=1, goal="other"))  # MCP calls now reach the new Session
     assert state.sessions["s2"].tree_id is not None
-    assert state.lifecycle(state.trees[r]) == "dormant"
+    assert state.lifecycle(state.trees[r]) == "hidden"
 
 
 def test_resume_reattaches_last_tree(state):

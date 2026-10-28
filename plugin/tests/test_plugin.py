@@ -38,7 +38,7 @@ def test_session_start_lists_candidates_and_resume(app, tools):
     tools.create_tree("Ship it")
     hook("end")
     note = _context(hook("session-start", session_id="s2"))
-    assert "t1 [dormant] Ship it" in note and "ask the user" in note
+    assert "t1 [hidden] Ship it" in note and "ask the user" in note
     hook("end", session_id="s2")
     note = _context(hook("session-start", source="resume"))  # s1 resumed
     assert "attached to tree t1 (resumed)" in note
@@ -103,7 +103,7 @@ def test_mcp_follows_clear(app, tools):
     hook("end")
     hook("session-start", session_id="s2", source="clear")
     assert "no tree" in pytest.raises(RuntimeError, tools.get_tree).value.args[0]
-    assert tools.list_candidates() == "t1 [dormant] first"
+    assert tools.list_candidates() == "t1 [hidden] first"
 
 
 @pytest.mark.parametrize("running", [True, False])

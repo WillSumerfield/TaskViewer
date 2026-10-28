@@ -10,7 +10,6 @@ STATUS_ICON = {"planned": "○", "active": "●", "done": "✓", "blocked": "⧖
 # Windows draws ▶ as a colour emoji; ▸ has no emoji form
 ACTIVITY_ICON = {"working": "▸" if sys.platform == "win32" else "▶", "idle": "◦", "awaiting": "⚠"}
 AWAIT = ACTIVITY_ICON["awaiting"]
-DORMANT = "◌ Dormant"
 
 
 @dataclass(frozen=True)
@@ -60,11 +59,10 @@ def layout(snap: p.SnapshotView, collapsed: bool, home: str | None = None) -> li
         trees = sorted((t for t in snap.trees if t.project == pr), key=lambda t: int(t.id.lstrip("t")))
         for t in trees:
             ss = by_tree.get(t.id, [])
-            tag = DORMANT if t.lifecycle == "dormant" else ""
             if any(s.activity == "awaiting" for s in ss):  # ⚠ replaces the status icon, line goes yellow
-                rows.append(Row("task", t.root.goal, AWAIT, 0, tag, "awaiting"))
+                rows.append(Row("task", t.root.goal, AWAIT, 0, style="awaiting"))
             else:
-                rows.append(Row("task", t.root.goal, STATUS_ICON[t.root.status], 0, tag, t.root.status))
+                rows.append(Row("task", t.root.goal, STATUS_ICON[t.root.status], 0, style=t.root.status))
             if collapsed:
                 continue
             for c in t.root.children:

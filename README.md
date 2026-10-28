@@ -162,7 +162,7 @@ Notes:
 - **Board and Glance:** subscribe to the App and redraw whenever something changes. They never edit anything. Hotkeys reach the running Board through a small local channel: a Unix socket on Linux, a named pipe on Windows.
 - **Sessions:**
   - A Session counts as live while its Claude process runs.
-  - A tree whose Sessions have all left turns Dormant after 8 hours. Later it is hidden, and it is deleted a month after that.
+  - When a tree's last Session leaves, the tree is hidden from the Board straight away, and deleted a month later.
   - A new Session in the same Project is offered the old tree to pick up again.
 
 ## Config

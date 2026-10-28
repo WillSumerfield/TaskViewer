@@ -9,12 +9,11 @@ import taskviewer_protocol as p
 
 from .liveness import ancestors, claude_ancestor, process_start
 
-DORMANT_SECS = 8 * 3600
 HIDDEN_SECS = 30 * 24 * 3600
 FINISHED = ("done", "dropped")
 STALE_TURNS = 5  # working turns without a tree change before reminding
 MAX_CANDIDATES = 10
-_LC_ORDER = {"live": 0, "dormant": 1, "hidden": 2}
+_LC_ORDER = {"live": 0, "hidden": 1}
 
 
 class OpError(Exception):
@@ -122,14 +121,12 @@ class State:
         return f"t{i}"
 
     def lifecycle(self, tree: Tree) -> p.Lifecycle:
-        if tree.sessions or tree.last_left_at is None:
-            return "live"
-        age = self.clock() - tree.last_left_at
-        return "dormant" if age < DORMANT_SECS else "hidden"
+        """Live while a Session is on it (or never had one); Hidden once the last Session leaves."""
+        return "live" if tree.sessions or tree.last_left_at is None else "hidden"
 
     def _expired(self, tree: Tree) -> bool:
         return not tree.sessions and tree.last_left_at is not None and \
-            self.clock() - tree.last_left_at >= DORMANT_SECS + HIDDEN_SECS
+            self.clock() - tree.last_left_at >= HIDDEN_SECS
 
     # ---- session attach / detach ----
 
@@ -419,6 +416,5 @@ class State:
         return p.Glance(
             live=len(self.sessions),
             awaiting=sum(s.activity == "awaiting" for s in self.sessions.values()),
-            blocked=sum(t.status == "blocked" for tr in self.visible_trees() if self.lifecycle(tr) == "live"
-                        for t in tr.tasks.values()),  # Dormant trees don't nag
+            blocked=sum(t.status == "blocked" for tr in self.visible_trees() for t in tr.tasks.values()),
         )

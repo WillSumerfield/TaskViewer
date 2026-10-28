@@ -19,7 +19,7 @@ def test_roundtrip(tmp_path, state, clock):
     fresh = State(clock)
     st.load(fresh)
     assert fresh.snapshot() == state.snapshot()
-    assert fresh.lifecycle(fresh.trees[other]) == "dormant"
+    assert fresh.lifecycle(fresh.trees[other]) == "hidden"
     assert fresh.task_tree[a] == r
     # id counter survives, so new ids don't collide
     assert add(fresh, r) not in state.task_tree
