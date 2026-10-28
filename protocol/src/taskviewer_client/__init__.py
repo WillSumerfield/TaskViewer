@@ -1,4 +1,7 @@
-"""Stdlib-only App client: find the port, send one request, read the reply."""
+"""Stdlib-only App client shared by Plugin and Board: find the port, send one request, read the reply.
+
+Kept out of taskviewer_protocol so importing it skips msgspec (hooks must stay fast).
+"""
 
 import json
 import os

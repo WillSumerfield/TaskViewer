@@ -8,7 +8,7 @@ import os
 import subprocess
 import sys
 
-from .client import AppDown, call, call_or_start
+from taskviewer_client import AppDown, call, call_or_start
 
 AWAIT_NOTIFICATIONS = ("permission_prompt", "elicitation_dialog")
 

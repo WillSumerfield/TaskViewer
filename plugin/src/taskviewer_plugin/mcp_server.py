@@ -11,7 +11,7 @@ from mcp.server.mcpserver import MCPServer
 
 import taskviewer_protocol as p
 
-from .client import AppDown, call
+from taskviewer_client import AppDown, call
 
 PID = os.getppid()
 

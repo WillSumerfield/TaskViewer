@@ -4,7 +4,8 @@ import os
 import pytest
 
 from taskviewer_app.state import STALE_TURNS
-from taskviewer_plugin import client, mcp_server as m
+import taskviewer_client as client
+from taskviewer_plugin import mcp_server as m
 
 from plugin_helpers import hook
 
