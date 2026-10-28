@@ -6,6 +6,7 @@ dependencies = ["taskviewer-protocol", "PySide6-Essentials>=6.7"]
 
 [project.scripts]
 taskviewer-board = "taskviewer_board.main:main"
+taskviewer-glance = "taskviewer_board.glance:main"
 
 [tool.uv.sources]
 taskviewer-protocol = { workspace = true }
