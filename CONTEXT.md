@@ -16,7 +16,7 @@ _Avoid_: Step, todo item
 A root Task together with all its descendant Subtasks.
 
 **Session**:
-One running Claude conversation attached to a live terminal. Ceases to exist from the tool's view once no longer active in a terminal.
+One running Claude conversation attached to a live terminal. Ceases to exist from the tool's view once no longer active in a terminal. Clearing the conversation starts a new Session; resuming an old conversation brings its Session back.
 _Avoid_: Agent, conversation, instance
 
 **Project**:
@@ -24,8 +24,12 @@ The git repository a Session runs in, or its starting directory if outside one; 
 _Avoid_: Workspace, repo, cwd
 
 **Awaiting user**:
-A Session state: the Session is idle at a prompt or permission request, waiting on the user. Distinct from a Blocked Task.
-_Avoid_: Blocked, idle
+A Session state: the Session cannot continue until the user answers, either a permission request or a question Claude has put to the user. Claude judges the latter; a Session that has simply finished its turn is not Awaiting user. Distinct from a Blocked Task.
+_Avoid_: Blocked, waiting
+
+**Idle**:
+A Session state: the Session has finished its turn and is not Awaiting user.
+_Avoid_: Done, finished, waiting
 
 ### Task status
 
@@ -60,5 +64,5 @@ A Task tree past its Dormant period; not shown, but still findable by new Sessio
 _Avoid_: Archived
 
 **Re-attach**:
-A new Session claiming an existing Dormant or Hidden Task tree as the one it is working on, after confirming with the user.
+A Session claiming an existing Dormant or Hidden Task tree as the one it is working on, after confirming with the user. A resumed Session returns to its previous tree without asking.
 _Avoid_: Resume
