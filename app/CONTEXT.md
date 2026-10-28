@@ -1,6 +1,6 @@
 # App
 
-The always-running desktop program that holds every Task tree and Session, and shows them to the user. Shared terms (Task, Session, statuses, lifecycle) are defined in the [root glossary](../CONTEXT.md).
+The always-running background program that holds every Task tree and Session and serves them to the views (Glance, [Board](../board/CONTEXT.md)). Shared terms (Task, Session, statuses, lifecycle) are defined in the [root glossary](../CONTEXT.md).
 
 ## Language
 
@@ -10,6 +10,3 @@ The always-running desktop program that holds every Task tree and Session, and s
 The always-visible one-line summary in the desktop bar (or tray): counts of Live Sessions plus alerts for Awaiting user and Blocked.
 _Avoid_: Widget, status, indicator
 
-**Board**:
-The toggleable, read-only detail view of all visible Task trees, grouped by Project then tree, shown over current work and hidden on demand.
-_Avoid_: Window, panel, dashboard
