@@ -134,3 +134,21 @@ def test_candidates_capped_and_ordered(state, clock):
     assert cands[1].tree_id == trees[-1]  # most recently left first
     own = state.apply(p.ListCandidates(session_id="s2"))[0]
     assert trees[0] not in [c.tree_id for c in own]
+
+
+def test_claude_ancestor_skips_launchers():
+    from taskviewer_app.liveness import claude_ancestor
+
+    names = {9: "taskviewer-hook.exe", 8: "bash.exe", 7: "claude.exe", 6: "explorer.exe", 5: "python", 4: "uv"}
+    up = {9: [8, 7, 6], 5: [4, 7], 8: [6]}
+    find = lambda pid: claude_ancestor(pid, names.__getitem__, lambda q: up.get(q, []))
+    assert find(9) == 7  # launcher -> shell -> claude
+    assert find(7) == 7  # already claude
+    assert find(5) == 5  # not a launcher: kept
+    assert find(8) == 8  # launchers lead to non-claude: kept
+
+
+def test_register_resolves_claude_pid(clock):
+    state = State(clock, proc_start=lambda pid: 1.0, claude_pid=lambda pid: {9: 7}.get(pid, pid))
+    state.apply(p.RegisterSession(session_id="s1", pid=9, project="/proj"))
+    assert state.sessions["s1"].pid == 7

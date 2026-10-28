@@ -7,7 +7,7 @@ import msgspec
 
 import taskviewer_protocol as p
 
-from .liveness import ancestors, process_start
+from .liveness import ancestors, claude_ancestor, process_start
 
 DORMANT_SECS = 8 * 3600
 HIDDEN_SECS = 30 * 24 * 3600
@@ -56,8 +56,10 @@ class Session(msgspec.Struct, kw_only=True):
 class State:
     def __init__(self, clock: Callable[[], float] = time.time,
                  proc_start: Callable[[int], float] = process_start,
-                 ancestors: Callable[[int], list[int]] = ancestors):
+                 ancestors: Callable[[int], list[int]] = ancestors,
+                 claude_pid: Callable[[int], int] = claude_ancestor):
         self.clock = clock
+        self.claude_pid = claude_pid
         self.proc_start = proc_start
         self.ancestors = ancestors
         self.trees: dict[str, Tree] = {}
@@ -293,17 +295,20 @@ class State:
 
     def _register(self, req: p.RegisterSession) -> dict:
         old = self.sessions.get(req.session_id)
+        pid = req.pid
         if req.pid_start is not None:
             start = req.pid_start
         else:
+            # a hook's parent may be a short-lived launcher (uv .exe on Windows) or shell
+            pid = self.claude_pid(pid)
             try:
-                start = self.proc_start(req.pid)
+                start = self.proc_start(pid)
             except Exception:
-                raise OpError(f"no process {req.pid}")
+                raise OpError(f"no process {pid}")
         # one claude process runs one Session at a time (/clear starts a new one)
-        for other in [o for o in self.sessions.values() if o.pid == req.pid and o.id != req.session_id]:
+        for other in [o for o in self.sessions.values() if o.pid == pid and o.id != req.session_id]:
             self.end_session(other.id)
-        s = Session(id=req.session_id, pid=req.pid, pid_start=start, project=req.project,
+        s = Session(id=req.session_id, pid=pid, pid_start=start, project=req.project,
                     transcript_path=req.transcript_path,
                     title=req.title or (old.title if old else ""),
                     tree_id=old.tree_id if old else None)
