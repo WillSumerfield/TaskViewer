@@ -4,12 +4,16 @@ import pytest
 import taskviewer_protocol as p
 
 REQUESTS = [
-    p.RegisterSession(id=1, session_id="s", pid=2, pid_start=3.0, project="/x", title="t"),
+    p.RegisterSession(id=1, session_id="s", pid=2, pid_start=3.0, project="/x", transcript_path="/t.jsonl"),
     p.EndSession(session_id="s"),
-    p.SetAwaiting(session_id="s", awaiting=True),
+    p.SetActivity(session_id="s", activity="idle"),
+    p.SetAwaiting(pid=5),
+    p.PromptSubmitted(session_id="s"),
+    p.ToolUsed(session_id="s"),
+    p.TurnEnded(session_id="s"),
     p.SetTitle(session_id="s", title="new"),
     p.CreateTree(session_id="s", goal="g"),
-    p.Attach(session_id="s", tree_id="t1"),
+    p.Attach(pid=5, tree_id="t1"),
     p.Detach(session_id="s"),
     p.ListCandidates(project="/x"),
     p.GetTree(session_id="s"),

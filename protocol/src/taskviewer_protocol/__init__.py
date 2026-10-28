@@ -7,6 +7,7 @@ import msgspec
 Status = Literal["planned", "active", "done", "blocked", "dropped"]
 Lifecycle = Literal["live", "dormant", "hidden"]
 Topic = Literal["glance", "state"]
+Activity = Literal["working", "idle", "awaiting"]
 
 STATUSES: tuple[str, ...] = Status.__args__
 
@@ -17,11 +18,19 @@ class Request(msgspec.Struct, tag_field="op", kw_only=True, forbid_unknown_field
     id: int = 0
 
 
+class Who(Request, kw_only=True):
+    """Identifies a Session by id, or (MCP tools) by pid of a process it owns."""
+    session_id: str | None = None
+    pid: int | None = None
+
+
 class RegisterSession(Request, tag="register_session"):
+    """Reply: {tree_id, candidates}. Re-attaches a resumed Session to its last tree."""
     session_id: str
     pid: int
-    pid_start: float
     project: str
+    pid_start: float | None = None  # App reads it when omitted
+    transcript_path: str = ""
     title: str = ""
 
 
@@ -29,9 +38,26 @@ class EndSession(Request, tag="end_session"):
     session_id: str
 
 
-class SetAwaiting(Request, tag="set_awaiting"):
+class SetActivity(Request, tag="set_activity"):
     session_id: str
-    awaiting: bool
+    activity: Activity
+
+
+class SetAwaiting(Who, tag="set_awaiting"):
+    """Claude ends this turn waiting on the user's answer."""
+
+
+class PromptSubmitted(Request, tag="prompt_submitted"):
+    """Reply: {remind, tree_id}."""
+    session_id: str
+
+
+class ToolUsed(Request, tag="tool_used"):
+    session_id: str
+
+
+class TurnEnded(Request, tag="turn_ended"):
+    session_id: str
 
 
 class SetTitle(Request, tag="set_title"):
@@ -39,27 +65,24 @@ class SetTitle(Request, tag="set_title"):
     title: str
 
 
-class CreateTree(Request, tag="create_tree"):
-    session_id: str
+class CreateTree(Who, tag="create_tree"):
     goal: str
 
 
-class Attach(Request, tag="attach"):
-    session_id: str
+class Attach(Who, tag="attach"):
     tree_id: str
 
 
-class Detach(Request, tag="detach"):
-    session_id: str
+class Detach(Who, tag="detach"):
+    pass
 
 
-class ListCandidates(Request, tag="list_candidates"):
-    project: str
+class ListCandidates(Who, tag="list_candidates"):
+    project: str | None = None  # else the Session's Project
 
 
-class GetTree(Request, tag="get_tree"):
-    session_id: str | None = None
-    tree_id: str | None = None
+class GetTree(Who, tag="get_tree"):
+    tree_id: str | None = None  # else the Session's tree
 
 
 class AddTask(Request, tag="add_task"):
@@ -97,7 +120,7 @@ class Subscribe(Request, tag="subscribe"):
 
 
 AnyRequest = (
-    RegisterSession | EndSession | SetAwaiting | SetTitle | CreateTree | Attach | Detach
+    RegisterSession | EndSession | SetActivity | SetAwaiting | PromptSubmitted | ToolUsed | TurnEnded | SetTitle | CreateTree | Attach | Detach
     | ListCandidates | GetTree | AddTask | SetStatus | RenameTask | MoveTask | DeleteTask
     | Snapshot | Subscribe
 )
@@ -132,7 +155,7 @@ class SessionView(msgspec.Struct, kw_only=True):
     id: str
     project: str
     title: str
-    awaiting: bool
+    activity: Activity
     tree_id: str | None
 
 
