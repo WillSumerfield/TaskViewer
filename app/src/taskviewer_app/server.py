@@ -10,6 +10,7 @@ import taskviewer_protocol as p
 from .liveness import is_alive
 from .state import OpError, State
 from .storage import Storage
+from .titles import Titles
 
 # Ops that never change state (skip flush + broadcast)
 READ_OPS = (p.ListCandidates, p.GetTree, p.Snapshot)
@@ -30,6 +31,7 @@ class Server:
         self.storage = storage
         self.alive = alive
         self.sweep_secs = sweep_secs
+        self.titles = Titles()
         self.subs: dict[asyncio.StreamWriter, set[str]] = {}
         self._fresh: set[asyncio.StreamWriter] = set()  # subscribed, initial push pending
         self.on_change: list[Callable[[], None]] = []  # in-process listeners (Board, phase 3)
@@ -72,7 +74,8 @@ class Server:
     async def _sweep_loop(self):
         while True:
             await asyncio.sleep(self.sweep_secs)
-            if self.state.sweep(self.alive):
+            changed = self.state.sweep(self.alive)
+            if self.titles.poll(self.state) or changed:
                 self._changed()
 
     def handle_line(self, line: bytes, writer: asyncio.StreamWriter | None = None) -> p.Reply:
