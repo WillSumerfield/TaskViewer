@@ -1,4 +1,4 @@
-"""`taskviewer-board` runs the Board; `taskviewer-board toggle|collapse` controls the running one."""
+"""`taskviewer-board` runs the Board; `taskviewer-board toggle|collapse|reload` controls the running one."""
 
 import argparse
 import sys
@@ -11,13 +11,13 @@ def run():
 
     from PySide6.QtWidgets import QApplication
 
-    from . import control, feed
+    from . import config, control, feed
     from .window import Board, Bridge
 
     app = QApplication(sys.argv)
     app.setApplicationName("TaskViewer")
     app.setDesktopFileName("TaskViewer")
-    board = Board()
+    board = Board(config.load())
     server = control.make_server(board.command)
     if server is None:
         print("taskviewer-board already running")
@@ -32,7 +32,7 @@ def run():
 
 def main():
     ap = argparse.ArgumentParser(prog="taskviewer-board")
-    ap.add_argument("command", nargs="?", choices=["toggle", "collapse"])
+    ap.add_argument("command", nargs="?", choices=["toggle", "collapse", "reload"])
     args = ap.parse_args()
     if args.command is None:
         run()

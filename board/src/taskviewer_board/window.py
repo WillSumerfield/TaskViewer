@@ -7,9 +7,11 @@ from PySide6.QtCore import QObject, QPoint, QRect, Qt, Signal
 from PySide6.QtGui import QColor, QCursor, QFont, QFontMetrics, QGuiApplication, QPainter
 from PySide6.QtWidgets import QFrame, QScrollArea, QVBoxLayout, QWidget
 
+from . import config
+from .config import Config, Rect
 from .layout import ACTIVITY_ICON, AWAIT, STATUS_ICON, Row, layout
 
-WIDTH, PAD, MARGIN, MAX_FRAC, OPACITY, RADIUS = 300, 10, 8, 0.8, 0.9, 10
+PAD, RADIUS = 10, 10
 INDENT = "  "
 FONTS = ["JetBrains Mono", "DejaVu Sans Mono", "Noto Sans Math", "monospace"]  # later ones fill missing glyphs
 BG = "#1e1f24"
@@ -22,25 +24,30 @@ COLOR = {
 }
 
 
-def focused_output() -> tuple[str, QRect]:
-    """Name + usable rect of the focused i3 workspace; falls back to the cursor's screen."""
+def outputs() -> tuple[dict[str, Rect], str]:
+    """Usable rect of each output's visible i3 workspace + the focused output; falls back to Qt screens."""
     try:
         out = subprocess.run(["i3-msg", "-t", "get_workspaces"], capture_output=True, timeout=1).stdout
-        ws = next(w for w in json.loads(out) if w["focused"])
-        r = ws["rect"]
-        return ws["output"], QRect(r["x"], r["y"], r["width"], r["height"])
+        ws = [w for w in json.loads(out) if w["visible"]]
+        rects = {w["output"]: tuple(w["rect"][k] for k in ("x", "y", "width", "height")) for w in ws}
+        return rects, next(w["output"] for w in ws if w["focused"])
     except Exception:
+        rects = {sc.name(): sc.availableGeometry().getRect() for sc in QGuiApplication.screens()}
         screen = QGuiApplication.screenAt(QCursor.pos()) or QGuiApplication.primaryScreen()
-        return screen.name(), screen.availableGeometry()
+        return rects, screen.name()
 
 
 class Rows(QWidget):
-    def __init__(self):
+    def __init__(self, font_size: int):
         super().__init__()
         self.rows: list[Row] = []
+        self._drag: QPoint | None = None
+        self.set_font_size(font_size)
+
+    def set_font_size(self, font_size: int):
         self.font_ = QFont()
         self.font_.setFamilies(FONTS)
-        self.font_.setPointSize(10)
+        self.font_.setPointSize(font_size)
         self.font_.setStyleHint(QFont.StyleHint.TypeWriter)
         self.italic = QFont(self.font_)
         self.italic.setItalic(True)
@@ -52,7 +59,6 @@ class Rows(QWidget):
         bold = QFontMetrics(self.bold_italic)  # fallback glyphs (⚠ ⧖) can be wider than a cell
         icons = [*STATUS_ICON.values(), *ACTIVITY_ICON.values()]
         self.iw = max(max(fm.horizontalAdvance(i), bold.horizontalAdvance(i)) for i in icons) + self.cw // 2
-        self._drag: QPoint | None = None
 
     def set_rows(self, rows: list[Row]):
         self.rows = rows
@@ -117,21 +123,19 @@ class Bridge(QObject):
 class Board(QWidget):
     """Rounded dark panel (needs a compositor for clean corners) holding the scrollable rows."""
 
-    def __init__(self):
+    def __init__(self, cfg: Config):
         super().__init__()
         self.setWindowTitle("TaskViewer")
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
                             | Qt.WindowType.WindowDoesNotAcceptFocus | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setWindowOpacity(OPACITY)
-        self.setFixedWidth(WIDTH)
         scroll = QScrollArea()
         scroll.setStyleSheet("background: transparent; border: none;")
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setWidgetResizable(True)
-        self.inner = Rows()
+        self.inner = Rows(cfg.font_size)
         scroll.setWidget(self.inner)
         box = QVBoxLayout(self)
         box.setContentsMargins(0, 0, 0, 0)
@@ -141,9 +145,20 @@ class Board(QWidget):
         self.snap = None
         self.app_down = False
         self.output = ""
+        self.out_rect: Rect | None = None
         self.limit = 600
         self.dragged: dict[str, QPoint] = {}
         self.placed = QPoint()
+        self.apply(cfg)
+
+    def apply(self, cfg: Config):
+        """Use a (re)loaded config; dragged spots are kept."""
+        self.cfg = cfg
+        self.setWindowOpacity(cfg.opacity)
+        self.setFixedWidth(cfg.width)
+        self.inner.set_font_size(cfg.font_size)
+        if self.out_rect is not None:
+            self.place()
 
     def paintEvent(self, _):
         qp = QPainter(self)
@@ -159,6 +174,8 @@ class Board(QWidget):
                 self.place()
         elif cmd == "collapse":
             self.collapsed = not self.collapsed
+        elif cmd == "reload":
+            self.apply(config.load())
         self.refresh()
 
     def on_snapshot(self, snap):
@@ -178,6 +195,7 @@ class Board(QWidget):
         rows = self.rows()
         self.inner.set_rows(rows)
         self.setFixedHeight(min(self.inner.height(), self.limit))
+        self.reposition()  # bottom/center anchors move as the height changes
         if self.wanted and rows:
             if not self.isVisible():
                 self.show()
@@ -186,10 +204,20 @@ class Board(QWidget):
             self.hide()
 
     def place(self):
-        self.output, rect = focused_output()
-        self.limit = int(rect.height() * MAX_FRAC)
-        top_right = QPoint(rect.right() - WIDTH - MARGIN, rect.top() + MARGIN)
-        self.move(self.dragged.get(self.output, top_right))
+        """Pick the output on each show: the configured one if plugged in, else focused."""
+        rects, focused = outputs()
+        self.output = config.pick_output(self.cfg.monitor, rects, focused)
+        self.out_rect = rects[self.output]
+        self.limit = int(self.out_rect[3] * self.cfg.max_height)
+        self.reposition()
+
+    def reposition(self):
+        if self.out_rect is None or self.inner._drag is not None:
+            return
+        if self.output in self.dragged:
+            self.move(self.dragged[self.output])
+        else:
+            self.move(*config.place(self.out_rect, (self.width(), self.height()), self.cfg))
         self.placed = self.pos()
 
     def remember_position(self):

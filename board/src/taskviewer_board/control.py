@@ -1,4 +1,4 @@
-"""Board control socket: `taskviewer-board toggle|collapse` -> running Board.
+"""Board control socket: `taskviewer-board toggle|collapse|reload` -> running Board.
 
 The sender is stdlib-only so hotkey commands start fast (no Qt import).
 """
@@ -10,7 +10,7 @@ import tempfile
 
 from taskviewer_client import state_dir
 
-COMMANDS = ("toggle", "collapse", "ping")
+COMMANDS = ("toggle", "collapse", "reload", "ping")
 
 
 def sock_path() -> str:

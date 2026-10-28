@@ -5,23 +5,13 @@ import subprocess
 import sys
 import threading
 
-import psutil
 import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
-@pytest.fixture
-def state_dir(tmp_path, monkeypatch):
-    d = tmp_path / "state"
-    monkeypatch.setenv("TASKVIEWER_STATE_DIR", str(d))
-    yield d
-    for proc in psutil.process_iter(["cmdline"]):
-        if str(d) in " ".join(proc.info["cmdline"] or []):
-            proc.kill()
-
-
-def test_control_commands_reach_running_board(state_dir):
+@pytest.mark.parametrize("cmd", ["toggle", "reload"])
+def test_control_commands_reach_running_board(state_dir, cmd):
     from PySide6.QtCore import QCoreApplication, QTimer
 
     from taskviewer_board import control
@@ -31,12 +21,12 @@ def test_control_commands_reach_running_board(state_dir):
     server = control.make_server(got.append)
     assert control.make_server(got.append) is None  # a second Board refuses to start
     sender = subprocess.Popen([sys.executable, "-c",
-                               "from taskviewer_board.main import main; import sys; sys.argv=['x','toggle']; main()"])
+                               "from taskviewer_board.main import main; import sys; sys.argv=['x',sys.argv[1]]; main()", cmd])
     QTimer.singleShot(3000, app.quit)
     timer = QTimer(interval=20, timeout=lambda: got and sender.poll() is not None and app.quit())
     timer.start()
     app.exec()
-    assert got == ["toggle"] and sender.returncode == 0
+    assert got == [cmd] and sender.returncode == 0
     server.close()
 
 
