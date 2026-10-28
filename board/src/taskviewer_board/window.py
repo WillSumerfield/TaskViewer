@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+import sys
 
 from PySide6.QtCore import QObject, QPoint, QRect, Qt, Signal
 from PySide6.QtGui import QColor, QCursor, QFont, QFontMetrics, QGuiApplication, QPainter
@@ -13,7 +14,7 @@ from .layout import ACTIVITY_ICON, AWAIT, STATUS_ICON, Row, layout
 
 PAD, RADIUS = 10, 10
 INDENT = "  "
-FONTS = ["JetBrains Mono", "DejaVu Sans Mono", "Noto Sans Math", "monospace"]  # later ones fill missing glyphs
+FONTS = ["JetBrains Mono", "DejaVu Sans Mono", "Consolas", "Noto Sans Math", "Segoe UI Symbol", "monospace"]  # later ones fill missing glyphs
 BG = "#1e1f24"
 FG = QColor("#d8dee9")
 DIM = QColor("#7a8090")
@@ -24,17 +25,33 @@ COLOR = {
 }
 
 
+def _qt_outputs() -> tuple[dict[str, Rect], str]:
+    """Each screen's area minus taskbars/panels; focused = the active window's monitor (Windows), else cursor's."""
+    screens = QGuiApplication.screens()
+    rects = {sc.name(): sc.availableGeometry().getRect() for sc in screens}
+    focused = None
+    if sys.platform == "win32":
+        from .winapi import foreground_monitor
+
+        if fg := foreground_monitor():
+            device, top_left = fg  # Qt keeps each screen's native top-left
+            focused = next((sc for sc in screens if sc.name() == device), None) or next(
+                (sc for sc in screens if sc.geometry().topLeft().toTuple() == top_left), None)
+    focused = focused or QGuiApplication.screenAt(QCursor.pos()) or QGuiApplication.primaryScreen()
+    return rects, focused.name()
+
+
 def outputs() -> tuple[dict[str, Rect], str]:
     """Usable rect of each output's visible i3 workspace + the focused output; falls back to Qt screens."""
+    if sys.platform == "win32":
+        return _qt_outputs()
     try:
         out = subprocess.run(["i3-msg", "-t", "get_workspaces"], capture_output=True, timeout=1).stdout
         ws = [w for w in json.loads(out) if w["visible"]]
         rects = {w["output"]: tuple(w["rect"][k] for k in ("x", "y", "width", "height")) for w in ws}
         return rects, next(w["output"] for w in ws if w["focused"])
     except Exception:
-        rects = {sc.name(): sc.availableGeometry().getRect() for sc in QGuiApplication.screens()}
-        screen = QGuiApplication.screenAt(QCursor.pos()) or QGuiApplication.primaryScreen()
-        return rects, screen.name()
+        return _qt_outputs()
 
 
 class Rows(QWidget):
@@ -124,6 +141,7 @@ class Bridge(QObject):
     """Carries feed-thread callbacks onto the Qt thread."""
     snapshot = Signal(object)
     down = Signal()
+    glance = Signal(object)
 
 
 class Board(QWidget):
@@ -155,6 +173,11 @@ class Board(QWidget):
         self.limit = 600
         self.dragged: dict[str, QPoint] = {}
         self.placed = QPoint()
+        self.on_reload = None  # extra reload step (Windows hotkeys)
+        if sys.platform == "win32":
+            from .winapi import no_activate
+
+            no_activate(int(self.winId()))
         self.apply(cfg)
 
     def apply(self, cfg: Config):
@@ -182,6 +205,8 @@ class Board(QWidget):
             self.collapsed = not self.collapsed
         elif cmd == "reload":
             self.apply(config.load())
+            if self.on_reload:
+                self.on_reload(self.cfg)
         self.refresh()
 
     def on_snapshot(self, snap):

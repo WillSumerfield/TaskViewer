@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 
 import pytest
 
@@ -45,3 +46,14 @@ def test_feed_starts_app_and_streams(state_dir):
     assert got.wait(10), "no snapshot: App not started"
     stop.set()
     assert downs and snaps[0].trees == []  # was down first, then started the App
+
+
+def test_feed_without_start_leaves_app_alone(state_dir):
+    from taskviewer_board import feed
+
+    downs = threading.Event()
+    stop = feed.run_in_thread(lambda s: None, downs.set, start=False)
+    assert downs.wait(5)
+    stop.set()
+    time.sleep(0.5)
+    assert not (state_dir / "port").exists()  # no App was launched

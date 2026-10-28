@@ -4,6 +4,9 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = ["taskviewer-protocol", "PySide6-Essentials>=6.7"]
 
+[project.gui-scripts]
+taskviewer-boardw = "taskviewer_board.main:main"  # no console window on Windows
+
 [project.scripts]
 taskviewer-board = "taskviewer_board.main:main"
 taskviewer-glance = "taskviewer_board.glance:main"

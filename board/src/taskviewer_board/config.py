@@ -18,6 +18,35 @@ class Config:
     max_height: float = 0.8
     opacity: float = 0.9
     font_size: int = 10
+    # Windows only (i3 binds keys on Linux)
+    hotkey_toggle: str = "ctrl+alt+t"
+    hotkey_collapse: str = "ctrl+alt+shift+t"
+    hotkey_reload: str = "ctrl+alt+r"
+    # use an App running elsewhere (e.g. WSL: \\wsl.localhost\Ubuntu\home\me\.local\state\taskviewer)
+    app_state_dir: str = ""
+
+
+MODS = {"alt": 0x1, "ctrl": 0x2, "shift": 0x4, "win": 0x8}  # Win32 MOD_*
+
+
+def parse_hotkey(s: str) -> tuple[int, int] | None:
+    """"ctrl+alt+t" -> (Win32 modifiers, virtual-key code); None if malformed.
+
+    Needs at least one modifier and one key: a letter, digit or F1-F24.
+    """
+    *mods, key = [p.strip() for p in s.lower().split("+")]
+    if not mods or any(m not in MODS for m in mods) or len(set(mods)) != len(mods):
+        return None
+    if len(key) == 1 and (key.isascii() and key.isalnum()):
+        vk = ord(key.upper())
+    elif key[:1] == "f" and key[1:].isdigit() and 1 <= int(key[1:]) <= 24:
+        vk = 0x6F + int(key[1:])
+    else:
+        return None
+    m = 0
+    for x in mods:
+        m |= MODS[x]
+    return m, vk
 
 
 def path() -> Path:
@@ -30,6 +59,8 @@ def path() -> Path:
 
 def _valid(key: str, v) -> bool:
     match key:
+        case "app_state_dir":
+            return isinstance(v, str)
         case "monitor":
             return isinstance(v, str) and bool(v)
         case "corner":
@@ -40,6 +71,8 @@ def _valid(key: str, v) -> bool:
             return type(v) is int and v > 0
         case "max_height" | "opacity":
             return type(v) in (int, float) and 0 < v <= 1
+        case "hotkey_toggle" | "hotkey_collapse" | "hotkey_reload":
+            return isinstance(v, str) and parse_hotkey(v) is not None
     return False
 
 

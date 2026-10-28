@@ -18,6 +18,21 @@ def _fg(colour: str | None, text: str) -> str:
     return f"%{{F{colour}}}{text}%{{F-}}" if colour else text
 
 
+def colour(g: dict) -> str | None:
+    """Alert colour: yellow if anything awaits, amber if only blocked, else none."""
+    return AWAITING if g["awaiting"] else BLOCKED if g["blocked"] else None
+
+
+def plain(g: dict) -> str:
+    """Untagged Glance text (tray tooltip); zero alerts hidden."""
+    parts = [f"●{g['live']} live"]
+    if g["awaiting"]:
+        parts.append(f"⚠{g['awaiting']} awaiting")
+    if g["blocked"]:
+        parts.append(f"⧖{g['blocked']} blocked")
+    return "Tasks: " + "  ".join(parts)
+
+
 def line(g: dict) -> str:
     """Polybar-formatted Glance; empty (module hidden) with no Sessions.
 
@@ -25,7 +40,7 @@ def line(g: dict) -> str:
     """
     if not g["live"]:
         return ""
-    c = AWAITING if g["awaiting"] else BLOCKED if g["blocked"] else None
+    c = colour(g)
     parts = [_fg(LIVE, "●") + GAP + _fg(c, f"{g['live']} live")]
     if g["awaiting"]:
         parts.append(_fg(c, "⚠") + GAP + _fg(c, f"{g['awaiting']} awaiting"))

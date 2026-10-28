@@ -45,3 +45,30 @@ def test_pick_output():
     assert pick_output("DP-0", outs, "HDMI-0") == "DP-0"
     assert pick_output("DP-9", outs, "HDMI-0") == "HDMI-0"  # unplugged → focused
     assert pick_output("focused", outs, "HDMI-0") == "HDMI-0"
+
+
+def test_parse_hotkey():
+    from taskviewer_board.config import parse_hotkey
+
+    assert parse_hotkey("ctrl+alt+t") == (0x3, ord("T"))
+    assert parse_hotkey("Ctrl+Alt+Shift+T") == (0x7, ord("T"))
+    assert parse_hotkey("win+f12") == (0x8, 0x7B)
+    assert parse_hotkey("ctrl+5") == (0x2, ord("5"))
+    for bad in ("t", "ctrl+", "hyper+t", "ctrl+ctrl+t", "ctrl+f25", "ctrl+space"):
+        assert parse_hotkey(bad) is None, bad
+
+
+def test_hotkey_keys_load(tmp_path, capsys):
+    p = tmp_path / "board.toml"
+    p.write_text('hotkey_toggle = "win+alt+b"\nhotkey_collapse = "nope"\n')
+    cfg = load(p)
+    assert cfg.hotkey_toggle == "win+alt+b"
+    assert cfg.hotkey_collapse == Config().hotkey_collapse
+    assert "bad hotkey_collapse" in capsys.readouterr().err
+
+
+def test_app_state_dir_loads(tmp_path):
+    p = tmp_path / "board.toml"
+    p.write_text("app_state_dir = '\\\\wsl.localhost\\Ubuntu\\home\\me\\.local\\state\\taskviewer'\n")
+    assert load(p).app_state_dir == r"\\wsl.localhost\Ubuntu\home\me\.local\state\taskviewer"
+    assert Config().app_state_dir == ""

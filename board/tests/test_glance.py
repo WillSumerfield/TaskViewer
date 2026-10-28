@@ -38,3 +38,11 @@ def test_glance_stream(state_dir):
     finally:
         proc.kill()
 
+
+
+def test_plain_and_colour():
+    from taskviewer_board.glance import colour, plain
+
+    assert plain(g(3)) == "Tasks: ●3 live" and colour(g(3)) is None
+    assert plain(g(3, 1, 2)) == "Tasks: ●3 live  ⚠1 awaiting  ⧖2 blocked"
+    assert colour(g(3, 1, 2)) == "#f0d040" and colour(g(3, blocked=2)) == "#e5b55c"

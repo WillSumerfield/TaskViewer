@@ -1,11 +1,12 @@
-"""Board control socket: `taskviewer-board toggle|collapse|reload` -> running Board.
+"""Board control channel: `taskviewer-board toggle|collapse|reload` -> running Board.
 
-The sender is stdlib-only so hotkey commands start fast (no Qt import).
+A Unix socket, or a named pipe on Windows. The sender is stdlib-only so commands start fast (no Qt import).
 """
 
 import hashlib
 import os
 import socket
+import sys
 import tempfile
 
 from taskviewer_client import state_dir
@@ -13,15 +14,25 @@ from taskviewer_client import state_dir
 COMMANDS = ("toggle", "collapse", "reload", "ping")
 
 
+WIN = sys.platform == "win32"
+PIPE = "\\\\.\\pipe\\"  # \\.\pipe\
+
+
 def sock_path() -> str:
-    """Short path (Unix sockets cap at ~108 chars), one per state dir."""
-    tag = hashlib.sha1(str(state_dir()).encode()).hexdigest()[:10]
-    return os.path.join(os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir(), f"taskviewer-board-{tag}.sock")
+    """One per state dir. Windows: a pipe name (Qt adds the pipe prefix). Else a short path (cap ~108 chars)."""
+    name = "taskviewer-board-" + hashlib.sha1(str(state_dir()).encode()).hexdigest()[:10]
+    if WIN:
+        return name
+    return os.path.join(os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir(), name + ".sock")
 
 
 def send(cmd: str) -> bool:
     """Send one command; False if no Board is listening."""
     try:
+        if WIN:
+            with open(PIPE + sock_path(), "wb", buffering=0) as f:
+                f.write(cmd.encode() + b"\n")
+            return True
         with socket.socket(socket.AF_UNIX) as s:
             s.settimeout(1.0)
             s.connect(sock_path())
