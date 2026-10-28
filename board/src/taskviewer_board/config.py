@@ -14,10 +14,10 @@ class Config:
     monitor: str = "focused"
     corner: str = "top-right"
     offset: tuple[int, int] = (8, 8)
-    width: int = 300
+    width: int = 360
     max_height: float = 0.8
-    opacity: float = 0.9
-    font_size: int = 10
+    opacity: float = 0.95
+    font_size: int = 14
     # Windows only (i3 binds keys on Linux)
     hotkey_toggle: str = "ctrl+alt+t"
     hotkey_collapse: str = "ctrl+alt+shift+t"

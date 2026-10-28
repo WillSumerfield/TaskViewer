@@ -21,8 +21,8 @@ def test_overrides(tmp_path):
 
 
 def test_bad_values_fall_back(tmp_path, capsys):
-    cfg = load(write(tmp_path, 'corner = "middle"\nwidth = "wide"\nopacity = 2\nbogus = 1\nfont_size = 14\n'))
-    assert cfg == Config(font_size=14)
+    cfg = load(write(tmp_path, 'corner = "middle"\nwidth = "wide"\nopacity = 2\nbogus = 1\nfont_size = 12\n'))
+    assert cfg == Config(font_size=12)
     err = capsys.readouterr().err
     assert "corner" in err and "width" in err and "opacity" in err and "bogus" in err
 

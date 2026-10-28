@@ -177,10 +177,10 @@ Every key is optional; these are the defaults:
 monitor = "focused"     # or an output name (e.g. "DP-0"); falls back to focused if unplugged
 corner = "top-right"    # top-left | top-right | bottom-left | bottom-right | center
 offset = [8, 8]         # px from the corner, x then y
-width = 300             # px
+width = 360             # px
 max_height = 0.8        # fraction of the monitor height
-opacity = 0.9
-font_size = 10          # pt
+opacity = 0.95
+font_size = 14          # pt
 
 # Windows only
 hotkey_toggle = "ctrl+alt+t"
