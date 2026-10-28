@@ -9,6 +9,7 @@ The user watches a live tree of what each Session is trying to achieve. Keep it 
 
 ## Tasks
 - A Task is a **goal** (an outcome the user wants), not a method or step. "Users can log in", not "edit auth.py".
+- Goals are **2–5 words**, never a sentence: "Board overlay", "Glance in i3bar". The Board is narrow; long goals get cut off.
 - Subtasks are narrower goals needed for their parent. Nest as deep as is natural; keep it small.
 - Create a tree once the user's goal is clear — always after a grill or plan is agreed. Skip pure Q&A and one-off questions.
 

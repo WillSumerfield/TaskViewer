@@ -62,7 +62,7 @@ def list_candidates() -> str:
 
 @mcp.tool()
 def create_tree(goal: str) -> str:
-    """Create a Task tree whose root Task is the user's overall goal; attaches this Session to it."""
+    """Create a Task tree whose root Task is the user's overall goal (2-5 words); attaches this Session to it."""
     result, w = _send(p.CreateTree(pid=PID, goal=goal))
     return _out(f"created tree {result['tree_id']}", w)
 
@@ -84,7 +84,7 @@ def detach() -> str:
 
 @mcp.tool()
 def add_task(parent_id: str, goal: str, status: p.Status = "planned") -> str:
-    """Add a Subtask under parent_id. goal = an outcome, not a method."""
+    """Add a Subtask under parent_id. goal = an outcome, not a method; 2-5 words, never a sentence."""
     result, w = _send(p.AddTask(parent_id=parent_id, goal=goal, status=status))
     return _out(f"added {result['task_id']}", w)
 
@@ -98,7 +98,7 @@ def set_status(task_id: str, status: p.Status) -> str:
 
 @mcp.tool()
 def rename_task(task_id: str, goal: str) -> str:
-    """Restate a Task's goal."""
+    """Restate a Task's goal (2-5 words)."""
     _, w = _send(p.RenameTask(task_id=task_id, goal=goal))
     return _out("ok", w)
 
