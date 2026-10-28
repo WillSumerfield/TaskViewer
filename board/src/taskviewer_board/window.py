@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QFrame, QScrollArea, QVBoxLayout, QWidget
 
 from .layout import ACTIVITY_ICON, AWAIT, STATUS_ICON, Row, layout
 
-WIDTH, PAD, MARGIN, MAX_FRAC, OPACITY, RADIUS = 360, 10, 8, 0.8, 0.9, 10
+WIDTH, PAD, MARGIN, MAX_FRAC, OPACITY, RADIUS = 300, 10, 8, 0.8, 0.9, 10
 INDENT = "  "
 FONTS = ["JetBrains Mono", "DejaVu Sans Mono", "Noto Sans Math", "monospace"]  # later ones fill missing glyphs
 BG = "#1e1f24"
