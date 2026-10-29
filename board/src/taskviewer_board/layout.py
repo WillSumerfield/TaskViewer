@@ -1,6 +1,7 @@
 """Qt-free Board rules: snapshot -> rows to paint."""
 
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,6 +21,25 @@ class Row:
     indent: int = 0
     tag: str = ""  # right-aligned
     style: str = ""  # status or activity name; "" = plain
+
+
+def wrap(text: str, width: int, measure: Callable[[str], int]) -> list[str]:
+    """Greedy word wrap to `width` (as measured); words longer than a line are split."""
+    lines: list[str] = []
+    cur = ""
+    for word in text.split():
+        cand = f"{cur} {word}" if cur else word
+        if measure(cand) <= width:
+            cur = cand
+            continue
+        if cur:
+            lines.append(cur)
+        while measure(word) > width and len(word) > 1:
+            n = max(1, next((i for i in range(len(word), 0, -1) if measure(word[:i]) <= width), 1))
+            lines.append(word[:n])
+            word = word[n:]
+        cur = word
+    return lines + [cur] if cur or not lines else lines
 
 
 def project_names(projects: set[str], home: str | None = None) -> dict[str, str]:

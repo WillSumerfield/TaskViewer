@@ -72,3 +72,13 @@ def test_app_state_dir_loads(tmp_path):
     p.write_text("app_state_dir = '\\\\wsl.localhost\\Ubuntu\\home\\me\\.local\\state\\taskviewer'\n")
     assert load(p).app_state_dir == r"\\wsl.localhost\Ubuntu\home\me\.local\state\taskviewer"
     assert Config().app_state_dir == ""
+
+
+def test_wrap_loads(tmp_path, capsys):
+    from taskviewer_board.config import load
+    f = tmp_path / "board.toml"
+    f.write_text("wrap = false\n")
+    assert load(f).wrap is False
+    f.write_text('wrap = "no"\n')
+    assert load(f).wrap is True
+    assert "bad wrap" in capsys.readouterr().err

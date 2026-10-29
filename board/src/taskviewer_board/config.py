@@ -18,6 +18,7 @@ class Config:
     max_height: float = 0.8
     opacity: float = 0.95
     font_size: int = 14
+    wrap: bool = True  # long goals/titles wrap; false = cut off with …
     # Windows only (i3 binds keys on Linux)
     hotkey_toggle: str = "ctrl+alt+t"
     hotkey_collapse: str = "ctrl+alt+shift+t"
@@ -59,6 +60,8 @@ def path() -> Path:
 
 def _valid(key: str, v) -> bool:
     match key:
+        case "wrap":
+            return type(v) is bool
         case "app_state_dir":
             return isinstance(v, str)
         case "monitor":

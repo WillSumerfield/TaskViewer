@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QFrame, QScrollArea, QVBoxLayout, QWidget
 
 from . import config
 from .config import Config, Rect
-from .layout import ACTIVITY_ICON, AWAIT, STATUS_ICON, Row, layout
+from .layout import ACTIVITY_ICON, AWAIT, STATUS_ICON, Row, layout, wrap
 
 PAD, RADIUS = 10, 10
 INDENT = "  "
@@ -59,6 +59,9 @@ class Rows(QWidget):
         super().__init__()
         self.rows: list[Row] = []
         self.ys: list[int] = []
+        self.lines: list[list[str]] = []  # text lines per row
+        self.wrap = True
+        self.avail = 0  # widget width used for wrapping
         self._drag: QPoint | None = None
         self.set_font_size(font_size)
 
@@ -80,43 +83,66 @@ class Rows(QWidget):
 
     def set_rows(self, rows: list[Row]):
         self.rows = rows
-        self.ys = []  # top of each row; Project headers after the first get a small gap above
+        self.relayout()
+
+    def resizeEvent(self, e):
+        if e.size().width() != self.avail:
+            self.avail = e.size().width()
+            self.relayout()
+
+    def _font(self, r: Row) -> QFont:
+        if r.kind == "session":
+            return self.bold_italic if r.style == "awaiting" else self.italic
+        return self.font_
+
+    def _text_box(self, r: Row, fm: QFontMetrics) -> tuple[int, int]:
+        """x where the row's text starts, and its max width."""
+        w = self.avail - 2 * PAD
+        x = PAD + (len(INDENT) * r.indent + 1) * self.cw + (self.iw if r.icon else 0)
+        tag_w = fm.horizontalAdvance(r.tag) + self.cw if r.tag else 0
+        return x, PAD + w - tag_w - x
+
+    def relayout(self):
+        """Wrap each row's text and place rows; Project headers after the first get a small gap above."""
+        self.ys, self.lines = [], []
         y = PAD
-        for i, r in enumerate(rows):
+        for i, r in enumerate(self.rows):
+            fm = QFontMetrics(self._font(r))
+            _, tw = self._text_box(r, fm)
+            if r.kind == "project":
+                lines = [r.text]
+            elif self.wrap and r.kind in ("task", "session"):
+                lines = wrap(r.text, tw, fm.horizontalAdvance)
+            else:
+                lines = [fm.elidedText(r.text, Qt.TextElideMode.ElideRight, tw)]
             y += self.lh // 3 if r.kind == "project" and i else 0
             self.ys.append(y)
-            y += self.lh
+            self.lines.append(lines)
+            y += self.lh * len(lines)
         self.setFixedHeight(y + PAD)
         self.update()
 
     def paintEvent(self, _):
         qp = QPainter(self)
         w = self.width() - 2 * PAD
-        for y, r in zip(self.ys, self.rows):
-            box = lambda x, width: QRect(x, y, width, self.lh)
+        for y, r, lines in zip(self.ys, self.rows, self.lines):
+            box = lambda x, width, line=0: QRect(x, y + line * self.lh, width, self.lh)
             if r.kind == "project":
                 qp.setFont(self.font_)
                 qp.setPen(DIM)
                 label = f"── {r.text} "
                 qp.drawText(box(PAD, w), Qt.AlignmentFlag.AlignVCenter, label + "─" * (w // self.cw))
                 continue
-            font = self.font_
-            pen = COLOR.get(r.style, FG)
-            if r.kind == "session":
-                font = self.bold_italic if r.style == "awaiting" else self.italic
-            elif r.kind == "note":
-                pen = DIM
+            font = self._font(r)
+            pen = DIM if r.kind == "note" else COLOR.get(r.style, FG)
             qp.setFont(font)
-            fm = QFontMetrics(font)
-            x = PAD + (len(INDENT) * r.indent + 1) * self.cw
-            tag_w = fm.horizontalAdvance(r.tag) + self.cw if r.tag else 0
+            x, _ = self._text_box(r, QFontMetrics(font))
             if r.icon:
                 qp.setPen(pen)
-                qp.drawText(box(x, self.iw), Qt.AlignmentFlag.AlignVCenter, r.icon)
-                x += self.iw
+                qp.drawText(box(x - self.iw, self.iw), Qt.AlignmentFlag.AlignVCenter, r.icon)
             qp.setPen(pen if r.kind == "session" or r.style == "awaiting" else FG if r.kind == "task" else DIM)
-            text = fm.elidedText(r.text, Qt.TextElideMode.ElideRight, PAD + w - tag_w - x)
-            qp.drawText(box(x, PAD + w - x), Qt.AlignmentFlag.AlignVCenter, text)
+            for n, text in enumerate(lines):
+                qp.drawText(box(x, PAD + w - x, n), Qt.AlignmentFlag.AlignVCenter, text)
             if r.tag:
                 qp.setPen(COLOR["awaiting"] if r.tag == AWAIT else DIM)
                 qp.drawText(box(PAD, w), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, r.tag)
@@ -186,6 +212,10 @@ class Board(QWidget):
         self.setWindowOpacity(cfg.opacity)
         self.setFixedWidth(cfg.width)
         self.inner.set_font_size(cfg.font_size)
+        self.inner.wrap = cfg.wrap
+        if not self.inner.avail:
+            self.inner.avail = cfg.width  # until the first resize
+        self.inner.relayout()
         if self.out_rect is not None:
             self.place()
 

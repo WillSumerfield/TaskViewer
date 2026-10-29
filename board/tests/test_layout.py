@@ -66,3 +66,11 @@ def test_no_tree_section():
 
 def test_empty():
     assert layout(p.SnapshotView(trees=[], sessions=[]), False) == []
+
+
+def test_wrap_words_and_long_words():
+    from taskviewer_board.layout import wrap
+    assert wrap("one two three", 7, len) == ["one two", "three"]
+    assert wrap("short", 10, len) == ["short"]
+    assert wrap("abcdefghij xy", 4, len) == ["abcd", "efgh", "ij", "xy"]
+    assert wrap("", 5, len) == [""]

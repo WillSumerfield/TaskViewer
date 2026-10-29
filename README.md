@@ -181,6 +181,7 @@ width = 360             # px
 max_height = 0.8        # fraction of the monitor height
 opacity = 0.95
 font_size = 14          # pt
+wrap = true             # long goals/titles wrap; false cuts them off with …
 
 # Windows only
 hotkey_toggle = "ctrl+alt+t"
