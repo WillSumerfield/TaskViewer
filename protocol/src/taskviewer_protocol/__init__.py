@@ -77,6 +77,12 @@ class Detach(Who, tag="detach"):
     pass
 
 
+class ResetTree(Who, tag="reset_tree"):
+    """Keep root: drop all Subtasks (goal renames root). new_tree: leave tree, create one with goal."""
+    new_tree: bool = False
+    goal: str | None = None
+
+
 class ListCandidates(Who, tag="list_candidates"):
     project: str | None = None  # else the Session's Project
 
@@ -120,7 +126,7 @@ class Subscribe(Request, tag="subscribe"):
 
 
 AnyRequest = (
-    RegisterSession | EndSession | SetActivity | SetAwaiting | PromptSubmitted | ToolUsed | TurnEnded | SetTitle | CreateTree | Attach | Detach
+    RegisterSession | EndSession | SetActivity | SetAwaiting | PromptSubmitted | ToolUsed | TurnEnded | SetTitle | CreateTree | Attach | Detach | ResetTree
     | ListCandidates | GetTree | AddTask | SetStatus | RenameTask | MoveTask | DeleteTask
     | Snapshot | Subscribe
 )
