@@ -24,6 +24,7 @@ The user watches a live tree of what each Session is trying to achieve. Keep it 
 - `set_status` when you start (active) or finish (done) a Task, and whenever the plan changes.
 - `dropped` for scope cuts or abandoned goals; `delete_task` only for mistakes.
 - `blocked` = the Task needs a user decision or input.
+- `reset_tree` at stopping points: when the user asks, or propose it and call only after they agree. Default keeps the root and clears its Subtasks; `new_tree=True` + goal starts a fresh tree (old one goes Hidden).
 - Heed warnings (e.g. all Subtasks done but parent still active) — fix the parent if it's really done.
 
 ## Waiting on the user

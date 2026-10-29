@@ -83,6 +83,16 @@ def detach() -> str:
 
 
 @mcp.tool()
+def reset_tree(new_tree: bool = False, goal: str | None = None) -> str:
+    """Reset this Session's tree in one call (only when the user asks or agrees).
+    Default: keep root, delete all its Subtasks; goal renames root.
+    new_tree=True: leave this tree (Hidden if no other Session) and start a new one with goal (required)."""
+    result, w = _send(p.ResetTree(pid=PID, new_tree=new_tree, goal=goal))
+    tree, _ = _send(p.GetTree(tree_id=result["tree_id"]))
+    return _out(render(tree), w)
+
+
+@mcp.tool()
 def add_task(parent_id: str, goal: str, status: p.Status = "planned") -> str:
     """Add a Subtask under parent_id. goal = an outcome, not a method; 2-5 words, never a sentence."""
     result, w = _send(p.AddTask(parent_id=parent_id, goal=goal, status=status))

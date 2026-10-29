@@ -95,6 +95,9 @@ def test_mcp_tools(app, tools):
     assert _session()["activity"] == "awaiting"
     with pytest.raises(RuntimeError, match="unknown task"):
         tools.set_status("t99", "done")
+    assert tools.reset_tree(goal="Ship TaskViewer") == ("tree t1 [live] Sessions: 1\n"
+                                                       "t1 [active] Ship TaskViewer")
+    assert tools.reset_tree(new_tree=True, goal="Next").startswith("tree t4 [live]")
 
 
 def test_mcp_follows_clear(app, tools):
