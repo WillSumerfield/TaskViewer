@@ -25,6 +25,17 @@ COLOR = {
 }
 
 
+# thin rounded handle, clear track, no arrow buttons
+SCROLL_CSS = """
+QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; border: none; }
+QScrollBar:vertical { background: transparent; width: 6px; margin: 12px 3px 12px 0; }
+QScrollBar::handle:vertical { background: rgba(122, 128, 144, 90); border-radius: 1px; min-height: 24px; }
+QScrollBar::handle:vertical:hover { background: rgba(122, 128, 144, 170); }
+QScrollBar::add-line, QScrollBar::sub-line { height: 0; border: none; background: none; }
+QScrollBar::add-page, QScrollBar::sub-page { background: none; }
+"""
+
+
 def _qt_outputs() -> tuple[dict[str, Rect], str]:
     """Each screen's area minus taskbars/panels; focused = the active window's monitor (Windows), else cursor's."""
     screens = QGuiApplication.screens()
@@ -181,7 +192,7 @@ class Board(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         scroll = QScrollArea()
-        scroll.setStyleSheet("background: transparent; border: none;")
+        scroll.setStyleSheet(SCROLL_CSS)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setWidgetResizable(True)
