@@ -59,6 +59,10 @@ A Task tree with at least one active Session working on it. A tree may have many
 A Task tree whose last Session has left; not shown, but still findable by new Sessions. Permanently deleted after 1 month Hidden.
 _Avoid_: Archived, Dormant, stale
 
+**Reset**:
+Clearing a Session's Task tree in one action, at a stopping point, when the user asks or agrees. Two forms: keep the root Task and remove all its Subtasks (other Sessions on the tree see it too), or leave the tree (it goes Hidden if no other Session remains) and start a new tree with a new root.
+_Avoid_: Clear, wipe, restart
+
 **Re-attach**:
 A Session claiming an existing Hidden Task tree as the one it is working on, after confirming with the user. A resumed Session returns to its previous tree without asking.
 _Avoid_: Resume
