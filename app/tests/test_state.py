@@ -174,3 +174,41 @@ def test_glance_counts(state):
     assert state.glance().blocked == 2
     make_tree(state, "s1")  # r goes Hidden: its Blocked Tasks stop counting
     assert state.glance() == p.Glance(live=2, awaiting=1, blocked=0)
+
+
+def test_reset_keeps_root_drops_subtasks(state):
+    register(state, "s1")
+    register(state, "s2")
+    r = make_tree(state, "s1", "old")
+    c = add(state, r)
+    g = add(state, c)
+    state.apply(p.Attach(session_id="s2", tree_id=r))
+    state.apply(p.SetStatus(task_id=r, status="done"))
+    result, w = state.apply(p.ResetTree(session_id="s1", goal="new"))
+    assert result == {"tree_id": r}
+    tree = state.trees[r]
+    assert list(tree.tasks) == [r] and tree.tasks[r].children == []
+    assert tree.tasks[r].goal == "new" and tree.tasks[r].status == "done"
+    assert c not in state.task_tree and g not in state.task_tree
+    assert tree.sessions == ["s1", "s2"]
+    assert w == ["1 other Sessions on this tree"]
+
+
+def test_reset_keep_root_needs_tree(state):
+    register(state)
+    with pytest.raises(OpError):
+        state.apply(p.ResetTree(session_id="s1"))
+
+
+def test_reset_new_tree_hides_old(state):
+    register(state)
+    old = make_tree(state)
+    add(state, old)
+    with pytest.raises(OpError):
+        state.apply(p.ResetTree(session_id="s1", new_tree=True))
+    result, _ = state.apply(p.ResetTree(session_id="s1", new_tree=True, goal="fresh"))
+    new = result["tree_id"]
+    assert new != old and state.sessions["s1"].tree_id == new
+    assert state.lifecycle(state.trees[old]) == "hidden"
+    assert len(state.trees[old].tasks) == 2
+    assert state.trees[new].tasks[new].goal == "fresh"

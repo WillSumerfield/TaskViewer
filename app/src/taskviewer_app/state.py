@@ -168,6 +168,38 @@ class State:
         self.dirty_trees.discard(tree.id)
         self.deleted_trees.add(tree.id)
 
+    def _create_tree(self, s: Session, goal: str) -> str:
+        rid = self._new_id()
+        tree = Tree(id=rid, project=s.project,
+                    tasks={rid: Task(id=rid, goal=goal, status="active", parent=None)})
+        self.trees[rid] = tree
+        self.task_tree[rid] = rid
+        self._attach(s, tree)  # leaves any previous tree
+        return rid
+
+    def _reset(self, req: p.ResetTree, warnings: list[str]) -> dict:
+        s = self._who(req)
+        if req.new_tree:
+            if not req.goal:
+                raise OpError("new_tree needs a goal")
+            return {"tree_id": self._create_tree(s, req.goal)}
+        if s.tree_id is None:
+            raise OpError(f"session {s.id} has no tree")
+        tree = self.trees[s.tree_id]
+        root = tree.tasks[tree.id]
+        for cid in root.children:
+            for tid in self._subtree(tree, cid):
+                del tree.tasks[tid]
+                del self.task_tree[tid]
+        root.children = []
+        if req.goal:
+            root.goal = req.goal
+        others = len(tree.sessions) - 1
+        if others > 0:
+            warnings.append(f"{others} other Sessions on this tree")
+        self._touch(tree)
+        return {"tree_id": tree.id}
+
     # ---- dispatch ----
 
     def apply(self, req: p.AnyRequest) -> tuple[object, list[str]]:
@@ -214,14 +246,9 @@ class State:
                 self.sessions_dirty = True
                 return None, warnings
             case p.CreateTree():
-                s = self._who(req)
-                rid = self._new_id()
-                tree = Tree(id=rid, project=s.project,
-                            tasks={rid: Task(id=rid, goal=req.goal, status="active", parent=None)})
-                self.trees[rid] = tree
-                self.task_tree[rid] = rid
-                self._attach(s, tree)
-                return {"tree_id": rid}, warnings
+                return {"tree_id": self._create_tree(self._who(req), req.goal)}, warnings
+            case p.ResetTree():
+                return self._reset(req, warnings), warnings
             case p.Attach():
                 s = self._who(req)
                 tree = self._tree(req.tree_id)
