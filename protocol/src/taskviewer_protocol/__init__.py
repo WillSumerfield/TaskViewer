@@ -32,6 +32,7 @@ class RegisterSession(Request, tag="register_session"):
     pid_start: float | None = None  # App reads it when omitted
     transcript_path: str = ""
     title: str = ""
+    shared_process: bool = False  # Codex app-server may host several Sessions
 
 
 class EndSession(Request, tag="end_session"):
@@ -44,12 +45,13 @@ class SetActivity(Request, tag="set_activity"):
 
 
 class SetAwaiting(Who, tag="set_awaiting"):
-    """Claude ends this turn waiting on the user's answer."""
+    """The assistant ends this turn waiting on the user's answer."""
 
 
 class PromptSubmitted(Request, tag="prompt_submitted"):
     """Reply: {remind, tree_id}."""
     session_id: str
+    title: str = ""  # first prompt fallback for hosts without transcript titles
 
 
 class ToolUsed(Request, tag="tool_used"):
@@ -60,9 +62,9 @@ class TurnEnded(Request, tag="turn_ended"):
     session_id: str
 
 
-class SetTitle(Request, tag="set_title"):
-    session_id: str
+class SetTitle(Who, tag="set_title"):
     title: str
+    automatic: bool = False  # assistant title; never overrides an explicit title
 
 
 class CreateTree(Who, tag="create_tree"):
