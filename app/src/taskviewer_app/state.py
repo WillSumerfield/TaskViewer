@@ -43,6 +43,10 @@ class Session(msgspec.Struct, kw_only=True):
     project: str
     transcript_path: str = ""
     title: str = ""
+    custom_title: str = ""
+    assistant_title: str = ""
+    title_offset: int = 0  # consumed transcript bytes, persisted to avoid replaying old /rename entries
+    shared_process: bool = False
     activity: p.Activity = "idle"  # until the first prompt
     tree_id: str | None = None
     # turn bookkeeping (stale-tree reminder, set_awaiting)
@@ -98,6 +102,8 @@ class State:
         if req.pid is None:
             raise OpError("give session_id or pid")
         for pid in [req.pid, *self.ancestors(req.pid)]:
+            if any(s.pid == pid and s.shared_process for s in self.sessions.values()):
+                raise OpError("shared host process: give session_id explicitly")
             sid = self.pid_session.get(pid)
             if sid in self.sessions:
                 return self.sessions[sid]
@@ -220,6 +226,8 @@ class State:
                 return None, warnings
             case p.PromptSubmitted():
                 s = self._session(req.session_id)
+                if not s.title and req.title:
+                    s.title = req.title
                 s.activity, s.ask_pending = "working", False
                 remind = s.stale_turns >= STALE_TURNS
                 if remind:
@@ -242,9 +250,19 @@ class State:
                 self.sessions_dirty = True
                 return None, warnings
             case p.SetTitle():
-                self._session(req.session_id).title = req.title
+                s = self._who(req)
+                title = " ".join(req.title.split())
+                if not title:
+                    raise OpError("title must not be empty")
+                if req.automatic:
+                    if not 2 <= len(title.split()) <= 5 or len(title) > 60:
+                        raise OpError("Session title must be 2-5 words and at most 60 characters")
+                    s.assistant_title = title
+                else:
+                    s.custom_title = title
+                s.title = s.custom_title or s.assistant_title
                 self.sessions_dirty = True
-                return None, warnings
+                return {"title": s.title, "custom": bool(s.custom_title)}, warnings
             case p.CreateTree():
                 return {"tree_id": self._create_tree(self._who(req), req.goal)}, warnings
             case p.ResetTree():
@@ -329,13 +347,23 @@ class State:
                 start = self.proc_start(pid)
             except Exception:
                 raise OpError(f"no process {pid}")
-        # one claude process runs one Session at a time (/clear starts a new one)
-        for other in [o for o in self.sessions.values() if o.pid == pid and o.id != req.session_id]:
+        # Claude /clear replaces its Session; Codex threads can share a host process.
+        for other in [o for o in self.sessions.values() if o.pid == pid and o.id != req.session_id
+                      and not req.shared_process and not o.shared_process]:
             self.end_session(other.id)
         s = Session(id=req.session_id, pid=pid, pid_start=start, project=req.project,
                     transcript_path=req.transcript_path,
                     title=req.title or (old.title if old else ""),
+                    custom_title=req.title or (old.custom_title if old else ""),
+                    assistant_title=old.assistant_title if old else "",
+                    title_offset=old.title_offset if old and old.transcript_path == req.transcript_path else 0,
+                    shared_process=req.shared_process,
                     tree_id=old.tree_id if old else None)
+        if old and req.shared_process:
+            # SessionStart also fires after compaction; retain turn bookkeeping.
+            s = msgspec.structs.replace(old, pid=pid, pid_start=start, project=req.project,
+                                       transcript_path=req.transcript_path, title_offset=s.title_offset,
+                                       shared_process=True)
         self.sessions[s.id] = s
         self.pid_session[s.pid] = s.id
         self.sessions_dirty = True

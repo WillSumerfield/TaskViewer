@@ -152,3 +152,46 @@ def test_register_resolves_claude_pid(clock):
     state = State(clock, proc_start=lambda pid: 1.0, claude_pid=lambda pid: {9: 7}.get(pid, pid))
     state.apply(p.RegisterSession(session_id="s1", pid=9, project="/proj"))
     assert state.sessions["s1"].pid == 7
+
+
+def test_codex_threads_share_pid_and_require_explicit_identity(state):
+    for sid in ("codex-a", "codex-b"):
+        state.apply(p.RegisterSession(session_id=sid, pid=7, pid_start=1.0,
+                                      project="/proj", shared_process=True))
+    first = make_tree(state, "codex-a", "First goal")
+    second = make_tree(state, "codex-b", "Second goal")
+    assert first != second
+    assert len(state.sessions) == 2
+    with pytest.raises(OpError, match="give session_id explicitly"):
+        state.apply(p.GetTree(pid=7))
+    state.end_session("codex-a")
+    assert state.sessions["codex-b"].tree_id == second
+    assert state.lifecycle(state.trees[second]) == "live"
+    # A single remaining Codex thread must still opt into explicit routing.
+    with pytest.raises(OpError, match="give session_id explicitly"):
+        state.apply(p.CreateTree(pid=7, goal="Wrong routing"))
+
+
+def test_codex_compaction_preserves_activity_and_tree(state):
+    request = p.RegisterSession(session_id="codex", pid=7, pid_start=1.0,
+                                project="/proj", shared_process=True)
+    state.apply(request)
+    tree_id = make_tree(state, "codex", "Ship it")
+    state.apply(p.PromptSubmitted(session_id="codex", title="First prompt"))
+    state.apply(p.ToolUsed(session_id="codex"))
+    state.apply(p.SetAwaiting(session_id="codex"))
+    state.apply(request)  # SessionStart source=compact
+    assert state.sessions["codex"].activity == "working"
+    assert state.sessions["codex"].tree_id == tree_id
+    assert state.sessions["codex"].ask_pending
+    state.apply(p.TurnEnded(session_id="codex"))
+    assert state.sessions["codex"].activity == "awaiting"
+    state.apply(p.PromptSubmitted(session_id="codex", title="Later prompt"))
+    assert state.sessions["codex"].title == "First prompt"
+
+
+def test_codex_ancestor_skips_shell():
+    from taskviewer_app.liveness import claude_ancestor
+
+    names = {9: "bash", 8: "codex", 7: "node"}
+    assert claude_ancestor(9, names.__getitem__, lambda pid: [8, 7]) == 8

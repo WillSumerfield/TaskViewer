@@ -21,7 +21,7 @@ def ancestors(pid: int) -> list[int]:
         return []
 
 
-CLAUDE = {"claude", "claude.exe", "node", "node.exe"}
+HOSTS = {"claude", "claude.exe", "node", "node.exe", "codex", "codex.exe", "codex-cli"}
 # short-lived processes between Claude and a hook: uv's .exe launchers (Windows) and shells
 LAUNCHERS = {"sh", "bash", "bash.exe", "zsh", "dash", "cmd.exe", "powershell.exe", "pwsh", "pwsh.exe"}
 
@@ -31,7 +31,7 @@ def _launcher(name: str) -> bool:
 
 
 def claude_ancestor(pid: int, name=lambda pid: psutil.Process(pid).name(), ancestors=ancestors) -> int:
-    """The Claude process behind a hook's parent pid: walk up through launchers to claude/node.
+    """The assistant host behind a hook's parent pid: walk through launchers to Claude/Codex.
 
     Any other chain keeps `pid`.
     """
@@ -40,7 +40,7 @@ def claude_ancestor(pid: int, name=lambda pid: psutil.Process(pid).name(), ances
             return pid
         for a in ancestors(pid):
             n = name(a)
-            if n in CLAUDE:
+            if n in HOSTS:
                 return a
             if not _launcher(n):
                 return pid

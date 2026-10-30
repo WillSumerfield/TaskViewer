@@ -77,6 +77,9 @@ class Server:
             changed = self.state.sweep(self.alive)
             if self.titles.poll(self.state) or changed:
                 self._changed()
+            elif self.state.sessions_dirty:
+                # Transcript progress must survive restart even when the visible title is unchanged.
+                self.storage.flush(self.state)
 
     def handle_line(self, line: bytes, writer: asyncio.StreamWriter | None = None) -> p.Reply:
         try:
@@ -88,6 +91,9 @@ class Server:
                 self.subs[writer] = set(req.topics)
                 self._fresh.add(writer)
             return p.Reply(id=req.id, ok=True)
+        if isinstance(req, p.SetTitle):
+            # Apply earlier transcript choices before the new title operation.
+            self.titles.poll(self.state)
         try:
             result, warnings = self.state.apply(req)
         except OpError as e:

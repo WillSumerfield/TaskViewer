@@ -91,6 +91,51 @@ def test_sweep_pushes_dead_session(tmp_path):
     asyncio.run(go())
 
 
+def test_sweep_persists_transcript_progress_without_title_change(tmp_path):
+    async def go():
+        state = State()
+        transcript = tmp_path / "titles.jsonl"
+        transcript.write_text(json.dumps({"type": "ai-title", "aiTitle": "Host title"}) + "\n")
+        server = Server(state, Storage(tmp_path), alive=lambda pid, s: True, sweep_secs=0.01)
+        await server.start()
+        try:
+            state.apply(p.RegisterSession(session_id="s1", pid=1, pid_start=0.0,
+                                          project="/p", transcript_path=str(transcript)))
+            state.apply(p.SetTitle(session_id="s1", title="User title"))
+            server.storage.flush(state)
+
+            async def persisted():
+                while True:
+                    fresh = State()
+                    server.storage.load(fresh)
+                    if fresh.sessions["s1"].title_offset == transcript.stat().st_size:
+                        assert fresh.sessions["s1"].title == "User title"
+                        return
+                    await asyncio.sleep(0.01)
+
+            await asyncio.wait_for(persisted(), 2)
+        finally:
+            await server.stop()
+
+    asyncio.run(go())
+
+
+def test_explicit_title_wins_over_unread_transcript_title(tmp_path):
+    transcript = tmp_path / "titles.jsonl"
+    transcript.write_text(json.dumps({"type": "custom-title", "customTitle": "Old title"}) + "\n")
+    state = State()
+    state.apply(p.RegisterSession(session_id="s1", pid=1, pid_start=0.0,
+                                  project="/p", transcript_path=str(transcript)))
+    server = Server(state, Storage(tmp_path))
+    reply = server.handle_line(p.encode(p.SetTitle(session_id="s1", title="New title")))
+    assert reply.ok
+    assert state.sessions["s1"].title == "New title"
+    assert not server.titles.poll(state)
+    fresh = State()
+    server.storage.load(fresh)
+    assert fresh.sessions["s1"].title == "New title"
+
+
 def test_one_app_per_state_dir(tmp_path):
     """Many launches at once (login) leave exactly one App running."""
     import subprocess
