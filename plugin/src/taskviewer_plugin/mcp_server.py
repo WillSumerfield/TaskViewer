@@ -1,7 +1,7 @@
-"""MCP server: Claude's tools for reading and changing its Task tree.
+"""MCP tools shared by Claude and Codex for reading and changing a Task tree.
 
-Calls identify the Session by this server's parent pid (claude); the App walks up from it to the
-most recent Session registered by that process, so /clear is followed.
+Claude identifies its Session by the parent PID, following /clear. Codex supplies
+the session_id from its hook context because one host can run multiple threads.
 """
 
 import os
@@ -17,7 +17,9 @@ PID = os.getppid()
 
 mcp = MCPServer("taskviewer", instructions=(
     "Task tree of the user's goals for this Session, shown live in the TaskViewer App. "
-    "Follow the taskviewer skill for when to create, attach and update."))
+    "Follow the taskviewer skill for when to create, attach and update. "
+    "In Codex, pass the session_id supplied by TaskViewer hook context to every "
+    "session-scoped tool. Never guess a session id or use another thread's id."))
 
 
 def _send(req: p.Request) -> tuple[object, list[str]]:
@@ -47,47 +49,47 @@ def render(tree: dict) -> str:
 
 
 @mcp.tool()
-def get_tree(tree_id: str | None = None) -> str:
+def get_tree(tree_id: str | None = None, session_id: str | None = None) -> str:
     """Show a Task tree (default: this Session's) as indented `id [status] goal` lines."""
-    result, _ = _send(p.GetTree(pid=PID, tree_id=tree_id))
+    result, _ = _send(p.GetTree(pid=PID, session_id=session_id, tree_id=tree_id))
     return render(result)
 
 
 @mcp.tool()
-def list_candidates() -> str:
+def list_candidates(session_id: str | None = None) -> str:
     """List other Task trees in this Project that this Session could Re-attach to."""
-    result, _ = _send(p.ListCandidates(pid=PID))
+    result, _ = _send(p.ListCandidates(pid=PID, session_id=session_id))
     return "\n".join(f"{c['tree_id']} [{c['lifecycle']}] {c['goal']}" for c in result) or "no candidates"
 
 
 @mcp.tool()
-def create_tree(goal: str) -> str:
+def create_tree(goal: str, session_id: str | None = None) -> str:
     """Create a Task tree whose root Task is the user's overall goal (2-5 words); attaches this Session to it."""
-    result, w = _send(p.CreateTree(pid=PID, goal=goal))
+    result, w = _send(p.CreateTree(pid=PID, session_id=session_id, goal=goal))
     return _out(f"created tree {result['tree_id']}", w)
 
 
 @mcp.tool()
-def attach(tree_id: str) -> str:
+def attach(tree_id: str, session_id: str | None = None) -> str:
     """Attach this Session to an existing tree (only after the user confirms). Returns the tree."""
-    _, w = _send(p.Attach(pid=PID, tree_id=tree_id))
+    _, w = _send(p.Attach(pid=PID, session_id=session_id, tree_id=tree_id))
     result, _ = _send(p.GetTree(tree_id=tree_id))
     return _out(render(result), w)
 
 
 @mcp.tool()
-def detach() -> str:
+def detach(session_id: str | None = None) -> str:
     """Stop working on the current tree (it becomes Hidden if no other Session is on it)."""
-    _, w = _send(p.Detach(pid=PID))
+    _, w = _send(p.Detach(pid=PID, session_id=session_id))
     return _out("detached", w)
 
 
 @mcp.tool()
-def reset_tree(new_tree: bool = False, goal: str | None = None) -> str:
+def reset_tree(new_tree: bool = False, goal: str | None = None, session_id: str | None = None) -> str:
     """Reset this Session's tree in one call (only when the user asks or agrees).
     Default: keep root, delete all its Subtasks; goal renames root.
     new_tree=True: leave this tree (Hidden if no other Session) and start a new one with goal (required)."""
-    result, w = _send(p.ResetTree(pid=PID, new_tree=new_tree, goal=goal))
+    result, w = _send(p.ResetTree(pid=PID, session_id=session_id, new_tree=new_tree, goal=goal))
     tree, _ = _send(p.GetTree(tree_id=result["tree_id"]))
     return _out(render(tree), w)
 
@@ -128,9 +130,19 @@ def delete_task(task_id: str) -> str:
 
 
 @mcp.tool()
-def set_awaiting() -> str:
+def set_session_title(title: str, session_id: str | None = None) -> str:
+    """Name this Session's current goal in 2-5 words (max 60 characters).
+    Set early, including before a Task tree exists; update when the goal changes.
+    Omit skill invocations and conversational wording. Explicit user titles take priority.
+    """
+    result, w = _send(p.SetTitle(pid=PID, session_id=session_id, title=title, automatic=True))
+    return _out(f"title: {result['title']}" + (" (explicit title preserved)" if result["custom"] else ""), w)
+
+
+@mcp.tool()
+def set_awaiting(session_id: str | None = None) -> str:
     """Call right before ending a turn that asks the user a question you need answered to continue."""
-    _, w = _send(p.SetAwaiting(pid=PID))
+    _, w = _send(p.SetAwaiting(pid=PID, session_id=session_id))
     return _out("ok", w)
 
 

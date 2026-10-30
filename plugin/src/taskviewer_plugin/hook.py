@@ -1,6 +1,6 @@
-"""Claude Code hook: `taskviewer-hook <event>` with the hook JSON on stdin. Stdlib only.
+"""Claude/Codex hook: `taskviewer-hook <event> [--provider codex]`, JSON on stdin. Stdlib only.
 
-Never fails the hook: any error is swallowed so Claude carries on.
+Hook connection/input errors never block the assistant.
 """
 
 import json
@@ -17,6 +17,11 @@ SILENT = ("Act on this note silently: update the tree with the tools, but don't 
           "the note or the tree update in your reply (asking before a Re-attach is the only exception).")
 
 
+TITLE_NOTE = ("Set a concise Session title with set_session_title as soon as the goal is clear, "
+              "even before creating a tree. Use 2-5 words (max 60 characters), omit skill invocations "
+              "and conversational wording, and update it when the goal changes. Explicit titles are preserved.")
+
+
 def project_of(cwd: str) -> str:
     try:
         out = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=cwd,
@@ -28,14 +33,18 @@ def project_of(cwd: str) -> str:
     return os.path.normpath(cwd)
 
 
-def claude_pid() -> int:
-    return int(os.environ.get("CLAUDE_PID") or os.getppid())
+def host_pid(provider: str) -> int:
+    key = "CODEX_PID" if provider == "codex" else "CLAUDE_PID"
+    return int(os.environ.get(key) or os.getppid())
 
 
-def register(h: dict) -> dict:
-    return call_or_start({"op": "register_session", "session_id": h["session_id"], "pid": claude_pid(),
+def register(h: dict, provider: str = "claude") -> dict:
+    request = {"op": "register_session", "session_id": h["session_id"], "pid": host_pid(provider),
                           "project": project_of(h.get("cwd") or os.getcwd()),
-                          "transcript_path": h.get("transcript_path", "")})
+                          "transcript_path": h.get("transcript_path") or ""}
+    if provider == "codex":
+        request["shared_process"] = True
+    return call_or_start(request)
 
 
 def ensure_board():
@@ -86,32 +95,52 @@ def remind_note(tree_id: str | None) -> str:
 
 
 def context(event: str, text: str):
-    text += f"\n{SILENT}"
+    text += f"\n{TITLE_NOTE}\n{SILENT}"
     print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": text}}))
 
 
-def handle(event: str, h: dict):
+def handle(event: str, h: dict, provider: str = "claude"):
     sid = h["session_id"]
     match event:
         case "session-start":
-            reply = register(h)
+            reply = register(h, provider)
             if reply.get("ok"):
-                context("SessionStart", start_note(reply["result"]))
+                note = start_note(reply["result"])
+                if provider == "codex":
+                    note += (f"\nYour TaskViewer session_id is {json.dumps(sid)}. Pass this exact session_id "
+                             "to every session-scoped taskviewer tool; never infer identity from a PID.")
+                context("SessionStart", note)
             if sys.platform == "win32":
                 ensure_board()
             elif in_wsl():
                 ensure_windows_board()
         case "prompt":
             msg = {"op": "prompt_submitted", "session_id": sid}
+            if provider == "codex":
+                words = [w for w in (h.get("prompt") or "").split() if not w.startswith(("$", "/"))]
+                msg["title"] = " ".join(words[:5])[:60]
             reply = call_or_start(msg)
             if not reply.get("ok") and "unknown session" in reply.get("error", ""):
-                register(h)  # App lost the Session (e.g. installed mid-Session); join now
+                register(h, provider)  # App lost the Session; join now
                 reply = call(msg)
             if reply.get("ok") and reply["result"]["remind"]:
                 context("UserPromptSubmit", remind_note(reply["result"]["tree_id"]))
+            elif provider == "codex":
+                # Refresh identity each turn, including installs mid-Session.
+                context("UserPromptSubmit", f"TaskViewer session_id: {json.dumps(sid)}. "
+                        "Pass it to session-scoped taskviewer tools.")
+        case "tool-start":
+            tool = h.get("tool_name", "").rsplit(".", 1)[-1]
+            activity = "awaiting" if tool in ("request_user_input", "AskUserQuestion") else "working"
+            call({"op": "set_activity", "session_id": sid, "activity": activity})
         case "tool":
             call({"op": "tool_used", "session_id": sid})
         case "ask":
+            # Older installed Codex hook definitions still send these events here.
+            # Approval checks may be automatic; async questions do not stop work.
+            if provider == "codex" and (h.get("hook_event_name") == "PermissionRequest"
+                                        or h.get("tool_name", "").endswith("request_user_input_async")):
+                return
             call({"op": "set_activity", "session_id": sid, "activity": "awaiting"})
         case "notify":
             if h.get("notification_type") in AWAIT_NOTIFICATIONS:
@@ -123,7 +152,11 @@ def handle(event: str, h: dict):
 
 
 def main():
+    provider = "codex" if sys.argv[2:] == ["--provider", "codex"] else "claude"
     try:
-        handle(sys.argv[1], json.load(sys.stdin))
+        handle(sys.argv[1], json.load(sys.stdin), provider)
     except (AppDown, KeyError, IndexError, ValueError, OSError):
         pass
+    finally:
+        if provider == "codex" and sys.argv[1] == "stop":
+            print("{}")  # Codex Stop expects JSON; never request a continuation.

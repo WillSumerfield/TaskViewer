@@ -15,7 +15,14 @@ The user watches a live tree of what each Session is trying to achieve. Keep it 
 - Subtasks are narrower goals needed for their parent. Nest as deep as is natural; keep it small.
 - Create a tree once the user's goal is clear — always after a grill or plan is agreed. Skip pure Q&A and one-off questions.
 
+## Session titles
+- As soon as the current goal is clear, call `set_session_title`, even during a grill or before a Task tree exists.
+- Use **2–5 words**, at most **60 characters**, describing the goal: "Fix no-tree wrapping". Omit skill invocations, conversational wording, and the Project name.
+- Update the title when the Session's goal changes. Explicit user titles are preserved automatically.
+- In Codex, pass the hook's exact `session_id` to `set_session_title`, as with other Session-scoped tools.
+
 ## Starting
+- Works with Claude Code and Codex. In Codex, pass the exact `session_id` from the TaskViewer hook note to `get_tree`, `list_candidates`, `create_tree`, `attach`, `detach`, `reset_tree`, and `set_awaiting`. Several Sessions can share a host process; never guess the id. If the note is missing, ask the user to enable/review TaskViewer hooks and restart the Session before changing its tree. Claude can omit this argument.
 - The SessionStart note lists Re-attach candidates (trees in this Project). If one matches the user's goal (same goal, or this work is a Subtask of it), ask the user once, then `attach` and add Subtasks there. Otherwise `create_tree`.
 - A resumed Session is already attached: `get_tree` and continue.
 - One tree per Session. Other Sessions may share it; `get_tree` before editing if time has passed.
