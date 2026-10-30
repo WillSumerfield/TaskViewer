@@ -95,5 +95,7 @@ def layout(snap: p.SnapshotView, collapsed: bool, home: str | None = None) -> li
             tag = AWAIT if any(s.activity == "awaiting" for s in loose) else ""
             rows.append(Row("note", f"{n} Session{'s' * (n != 1)}", indent=1, tag=tag))
         else:
-            rows += [_session(s, 1, names[s.project]) for s in loose]
+            for s in loose:
+                rows.append(Row("note", names[s.project], indent=1))
+                rows.append(_session(s, 1))
     return rows

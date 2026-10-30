@@ -60,7 +60,8 @@ def test_collapsed_headers_only_with_await_flag():
 def test_no_tree_section():
     snap = p.SnapshotView(trees=[], sessions=[sess("s1", "/home/u/abc"), sess("s2", "/home/u/q", activity="awaiting")])
     assert texts(layout(snap, False, HOME)) == [
-        ("project", "No tree", 0, ""), ("session", "s1", 1, "abc"), ("session", "s2", 1, "q")]
+        ("project", "No tree", 0, ""), ("note", "abc", 1, ""), ("session", "s1", 1, ""),
+        ("note", "q", 1, ""), ("session", "s2", 1, "")]
     assert texts(layout(snap, True, HOME)) == [("project", "No tree", 0, ""), ("note", "2 Sessions", 1, AWAIT)]
 
 

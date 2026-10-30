@@ -124,6 +124,8 @@ class Rows(QWidget):
                 lines = [r.text]
             elif self.wrap and r.kind in ("task", "session"):
                 lines = wrap(r.text, tw, fm.horizontalAdvance)
+                if r.kind == "session" and len(lines) > 2:
+                    lines = [lines[0], fm.elidedText(" ".join(lines[1:]), Qt.TextElideMode.ElideRight, tw)]
             else:
                 lines = [fm.elidedText(r.text, Qt.TextElideMode.ElideRight, tw)]
             y += self.lh // 3 if r.kind == "project" and i else 0
