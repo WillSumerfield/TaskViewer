@@ -1,6 +1,6 @@
 # TaskViewer
 
-See what every Claude Code Session is working on, at a glance.
+See what every Claude Code or Codex Session is working on, at a glance.
 
 Each Session keeps a **Task tree**: its goal broken into Subtasks, each marked Planned, Active, Done, Blocked or Dropped. TaskViewer shows all trees in two places:
 
@@ -35,7 +35,7 @@ Each Session keeps a **Task tree**: its goal broken into Subtasks, each marked P
 ## Requirements
 
 - Python 3.12+ and [uv](https://docs.astral.sh/uv/)
-- Claude Code
+- Claude Code or Codex with local plugin and lifecycle hook support
 - One of:
   - Linux with i3 (polybar and picom are optional)
   - Windows 10/11
@@ -43,7 +43,7 @@ Each Session keeps a **Task tree**: its goal broken into Subtasks, each marked P
 
 ## Install
 
-Run this where Claude Code runs (Linux, Windows or inside WSL), from the repo folder:
+Run this where your coding assistant runs (Linux, Windows or inside WSL), from the repo folder:
 
 ```sh
 uv tool install -e ./plugin --with-editable ./app --with-editable ./protocol --with-editable ./board \
@@ -52,14 +52,64 @@ uv tool install -e ./plugin --with-editable ./app --with-editable ./protocol --w
 
 On Windows PowerShell, put it on one line. Make sure uv's tool folder is on your PATH: run `uv tool update-shell` once, then open a new terminal.
 
-Then add the Claude Code plugin:
+Then install the plugin for your assistant. Both use the same MCP tools and skill.
+
+### Claude Code
 
 ```sh
 claude plugin marketplace add /path/to/TaskViewer
 claude plugin install taskviewer@taskviewer
 ```
 
-Start a new Claude Session; tracking now works. The next section sets up the views for your system.
+Start a new Claude Session; tracking now works.
+
+### Codex
+
+Tested with Codex CLI 0.166.0:
+
+```sh
+codex plugin marketplace add /path/to/TaskViewer
+codex plugin add taskviewer@taskviewer
+```
+
+Start a new Codex Session, then open `/hooks` and review/trust TaskViewer's hooks.
+Hooks that have not been trusted are skipped. Restart the Session after trusting
+its hooks. Use a local Codex host with lifecycle hooks; this integration does not
+track cloud-orchestrated sessions. The plugin remains in `plugin/claude-plugin/`
+for compatibility, with separate Claude and Codex manifests and hook definitions.
+
+Codex can run several Sessions in one app-server process. Its hook notes supply
+an explicit `session_id`, which the shared skill tells Codex to pass to tools.
+The App keeps those Sessions separate. Claude continues to use process-based
+routing, including `/clear`. Re-attach can share a tree across either assistant.
+
+For terminal Sessions that should disappear promptly when you exit, launch
+`codex --no-daemon` (also supported with `codex --no-daemon resume`). The default
+shared daemon can retain a conversation after its terminal client exits, delaying
+the SessionEnd hook. In that mode, process monitoring sees the daemon still
+running and cannot detect the individual terminal's exit.
+
+For Codex, the Awaiting user warning follows blocking question tools or an
+assistant's explicit signal when it ends a turn needing your answer. Async
+questions and approval checks do not trigger it: an approval check can proceed
+automatically, and Codex's hooks do not report when approval ends. Manual
+approval prompts therefore do not automatically trigger the warning either.
+Starting another tool clears a stale warning before that tool finishes.
+
+After editing or updating the plugin, refresh its installed copy and restart your
+Sessions. For Codex, run `codex plugin remove taskviewer@taskviewer` followed by
+`codex plugin add taskviewer@taskviewer`, then review any changed hooks with
+`/hooks`. Existing App processes must also be restarted after a Python code
+update, preferably after closing active Sessions, so the protocol changes load.
+
+Session titles describe the current goal in 2–5 words (up to 60 characters).
+The assistant sets one as soon as the goal is clear, including during a grill,
+and updates it when the goal changes. Explicit titles, including Claude `/rename`,
+take priority. Until then, Codex uses a short excerpt of its first prompt.
+Under **No tree**, the Project name appears above the Session title; the title
+wraps to at most two lines with an ellipsis. With `wrap = false`, it stays on one line.
+
+The next section sets up the views for your system.
 
 ## Setup
 
@@ -89,7 +139,7 @@ exec_always --no-startup-id taskviewer-board reload
 
 ### Windows
 
-Nothing else to do. The first Claude Session starts the Board, and a dot appears in the tray showing the Session count.
+Nothing else to do. The first Session starts the Board, and a dot appears in the tray showing the Session count.
 
 | Action | Does |
 |---|---|
@@ -106,7 +156,7 @@ The dot is blue normally, yellow when a Session is waiting for you, amber when a
 
 ### WSL
 
-For when Claude Code runs inside WSL. The App and plugin run in WSL; the Board and tray run on Windows and connect to the WSL App, so you get the same hotkeys and tray as native Windows.
+For when Claude Code or Codex runs inside WSL. The App and plugin run in WSL; the Board and tray run on Windows and connect to the WSL App, so you get the same hotkeys and tray as native Windows.
 
 You install TaskViewer twice: once inside WSL (for the App and plugin) and once on Windows (for the Board and tray). Each needs its own copy of the repo.
 
@@ -121,6 +171,8 @@ claude plugin marketplace add ~/TaskViewer
 claude plugin install taskviewer@taskviewer
 ```
 
+For Codex, replace the two `claude plugin` commands above with the Codex install commands in [Install](#codex).
+
 **2. On Windows** (PowerShell, a new window):
 
 ```powershell
@@ -130,7 +182,7 @@ uv tool install -e ./plugin --with-editable ./app --with-editable ./protocol --w
 uv tool update-shell
 ```
 
-Clone onto the Windows drive, not into WSL: an editable install from a `\\wsl.localhost` path is slow and fragile. The Claude plugin isn't needed on Windows.
+Clone onto the Windows drive, not into WSL: an editable install from a `\\wsl.localhost` path is slow and fragile. The assistant plugin isn't needed on Windows when the assistant runs only in WSL.
 
 **3. Point the Windows Board at the WSL App.** In WSL, run `printf '%s\n' "//wsl.localhost/$WSL_DISTRO_NAME$HOME/.local/state/taskviewer" | tr / '\\'` to print the path. Then, on Windows, create `%APPDATA%\taskviewer\board.toml` with that path in single quotes:
 
@@ -140,28 +192,28 @@ app_state_dir = '\\wsl.localhost\Ubuntu\home\me\.local\state\taskviewer'
 
 **4. Check that WSL can launch the Board.** Close and reopen the WSL terminal, then run `which taskviewer-boardw.exe`. It should print a `/mnt/c/...` path, because WSL adds the Windows PATH. If it prints nothing, open a new terminal after step 2 (so `uv tool update-shell` applies), or check that `appendWindowsPath` isn't turned off in `/etc/wsl.conf`.
 
-**5. Start a Claude Session in WSL.** Its hook starts the App in WSL and the Board on Windows, and the tray dot appears.
+**5. Start a Claude or Codex Session in WSL.** Its hook starts the App in WSL and the Board on Windows, and the tray dot appears.
 
 Notes:
 - With `app_state_dir` set, the Board never starts an App itself. The Sessions in WSL start the WSL App, and until then the tray stays grey.
-- The Board shows one App. If you also run Claude natively on Windows, those Sessions use a separate Windows App that this Board won't show.
+- The Board shows one App. If you also run either assistant natively on Windows, those Sessions use a separate Windows App that this Board won't show.
 - This relies on WSL2 forwarding localhost (the default). If the tray stays grey while Sessions run, check that `localhostForwarding` isn't turned off in `.wslconfig`.
 
 ### How it works
 
 ```
- Claude Code Session ──hooks + tools──▶ App ──live updates──▶ Board / Glance
+ Assistant Session ──hooks + tools──▶ App ──live updates──▶ Board / Glance
    (plugin)                             (state, saved to disk)  (read-only views)
 ```
 
 - **App:** a small background program that holds every Task tree and Session and saves them to disk. Hooks start it when it isn't running. It talks over a localhost TCP port and writes that port to its state folder.
-- **Plugin:** what Claude Code loads. It has three parts:
-  - **Tools:** let Claude create and update its tree.
-  - **Hooks:** report Session events (started, waiting for you, ended) and remind Claude when its tree looks stale.
-  - **Skill:** tells Claude when to keep a tree.
+- **Plugin:** what Claude Code or Codex loads. It has three parts:
+  - **Tools:** let the assistant create and update its tree.
+  - **Hooks:** report Session events (started, waiting for you, ended) and remind the assistant when its tree looks stale.
+  - **Skill:** tells the assistant when to keep a tree.
 - **Board and Glance:** subscribe to the App and redraw whenever something changes. They never edit anything. Hotkeys reach the running Board through a small local channel: a Unix socket on Linux, a named pipe on Windows.
 - **Sessions:**
-  - A Session counts as live while its Claude process runs.
+  - A Session ends when its host reports SessionEnd or its host process exits. Codex sends SessionEnd when its host exits or when an open conversation is archived or deleted. Closing a chat or exiting a terminal client of the shared daemon can leave it live until it has been unopened and inactive for 30 minutes. The hook cannot detect that client exit immediately; use `codex --no-daemon` for terminal process monitoring.
   - When a tree's last Session leaves, the tree is hidden from the Board straight away, and deleted a month later.
   - A new Session in the same Project is offered the old tree to pick up again.
 
@@ -194,7 +246,7 @@ After editing, reload the config (see the key tables above). You can also drag t
 
 ## Troubleshooting
 
-- **Board says "App not running":** start any Claude Session, or run `taskviewer-app` yourself.
+- **Board says "App not running":** start any Claude or Codex Session, or run `taskviewer-app` yourself.
 - **Windows: nothing happens:** check `%LOCALAPPDATA%\taskviewer\board.log`.
 - **A hotkey does nothing:** another program owns it. Pick a different one in `board.toml`; the log names the key that failed.
 - **Linux: black corners:** picom isn't running.
@@ -209,7 +261,9 @@ uv run pytest
 The repo is a uv workspace:
 - `protocol/`: message types and the stdlib client
 - `app/`: the background App
-- `plugin/`: the Claude Code plugin
+- `plugin/`: the Claude Code and Codex plugin
 - `board/`: Board and Glance
 
 `CONTEXT.md` defines the terms used throughout.
+
+Codex references: [plugin packaging](https://developers.openai.com/plugins/build/plugins) and [hook lifecycle and trust](https://learn.chatgpt.com/docs/hooks).
