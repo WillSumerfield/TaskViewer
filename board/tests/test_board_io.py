@@ -57,3 +57,19 @@ def test_feed_without_start_leaves_app_alone(state_dir):
     stop.set()
     time.sleep(0.5)
     assert not (state_dir / "port").exists()  # no App was launched
+
+
+def test_feed_reads_given_state_dir(state_dir, tmp_path, monkeypatch):
+    from taskviewer_board import feed
+    from taskviewer_client import start_app
+
+    start_app()  # App in state_dir
+    for _ in range(100):
+        if (state_dir / "port").exists():
+            break
+        time.sleep(0.1)
+    monkeypatch.setenv("TASKVIEWER_STATE_DIR", str(tmp_path / "elsewhere"))
+    got = threading.Event()
+    stop = feed.run_in_thread(lambda s: got.set(), lambda: None, start=False, sdir=state_dir)
+    assert got.wait(10), "no snapshot from the App in sdir"
+    stop.set()

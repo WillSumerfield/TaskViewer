@@ -72,6 +72,18 @@ def test_app_state_dir_loads(tmp_path):
     p.write_text("app_state_dir = '\\\\wsl.localhost\\Ubuntu\\home\\me\\.local\\state\\taskviewer'\n")
     assert load(p).app_state_dir == r"\\wsl.localhost\Ubuntu\home\me\.local\state\taskviewer"
     assert Config().app_state_dir == ""
+    assert Config().app_state_dirs() == []
+    assert load(p).app_state_dirs() == [r"\\wsl.localhost\Ubuntu\home\me\.local\state\taskviewer"]
+
+
+def test_app_state_dir_list_loads(tmp_path, capsys):
+    p = tmp_path / "board.toml"
+    p.write_text("app_state_dir = ['\\\\wsl.localhost\\A\\s', '\\\\wsl.localhost\\B\\s']\n")
+    assert load(p).app_state_dirs() == [r"\\wsl.localhost\A\s", r"\\wsl.localhost\B\s"]
+    for bad in ("[]", "['a', '']", "[1]"):
+        p.write_text(f"app_state_dir = {bad}\n")
+        assert load(p).app_state_dir == ""
+    assert "app_state_dir" in capsys.readouterr().err
 
 
 def test_wrap_loads(tmp_path, capsys):

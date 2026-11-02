@@ -54,7 +54,8 @@ class Tray(QSystemTrayIcon):
     def on_glance(self, g: dict):
         n = g["live"]
         self.setIcon(icon(colour(g) or LIVE, str(n) if n < 100 else "99+"))
-        self.setToolTip(plain(g))
+        down = g.get("down")
+        self.setToolTip(plain(g) + (f"\nDown: {', '.join(down)}" if down else ""))
 
     def on_down(self):
         self.setIcon(icon(DIM, ""))

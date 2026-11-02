@@ -3,15 +3,17 @@
 import argparse
 import os
 import sys
+from functools import partial
+from pathlib import Path
 
 from . import config
 from .control import send
 
 
 def use_app_state_dir(cfg: config.Config):
-    """board.toml app_state_dir points the Board (and its control channel name) at an App elsewhere."""
-    if cfg.app_state_dir:
-        os.environ["TASKVIEWER_STATE_DIR"] = cfg.app_state_dir
+    """board.toml app_state_dir points the Board at App(s) elsewhere; the first names its control channel and log."""
+    if dirs := cfg.app_state_dirs():
+        os.environ["TASKVIEWER_STATE_DIR"] = dirs[0]
 
 
 def run(cfg: config.Config):
@@ -19,7 +21,7 @@ def run(cfg: config.Config):
 
     from PySide6.QtWidgets import QApplication
 
-    from . import control, feed
+    from . import control, feed, merge
     from .window import Board, Bridge
 
     app = QApplication(sys.argv)
@@ -37,7 +39,11 @@ def run(cfg: config.Config):
     if sys.platform == "win32":
         win = windows(app, board, bridge)  # keep references alive
         on_glance = bridge.glance.emit
-    feed.run_in_thread(bridge.snapshot.emit, bridge.down.emit, on_glance, start=not cfg.app_state_dir)
+    dirs = cfg.app_state_dirs()
+    m = merge.Merger([merge.label(d) for d in dirs] or [""], bridge.snapshot.emit, bridge.down.emit, on_glance)
+    for i, d in enumerate(dirs or [None]):
+        feed.run_in_thread(partial(m.snapshot, i), partial(m.down, i), on_glance and partial(m.glance, i),
+                           start=not dirs, sdir=d and Path(d))
     signal.signal(signal.SIGINT, signal.SIG_DFL)
     app.exec()
 

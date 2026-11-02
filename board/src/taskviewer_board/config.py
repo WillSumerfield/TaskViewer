@@ -23,8 +23,13 @@ class Config:
     hotkey_toggle: str = "ctrl+alt+t"
     hotkey_collapse: str = "ctrl+alt+shift+t"
     hotkey_reload: str = "ctrl+alt+r"
-    # use an App running elsewhere (e.g. WSL: \\wsl.localhost\Ubuntu\home\me\.local\state\taskviewer)
-    app_state_dir: str = ""
+    # use App(s) running elsewhere (e.g. WSL: \\wsl.localhost\Ubuntu\home\me\.local\state\taskviewer);
+    # a list shows several Apps (e.g. one per WSL distro) on one Board
+    app_state_dir: str | tuple[str, ...] = ""
+
+    def app_state_dirs(self) -> list[str]:
+        d = self.app_state_dir
+        return ([d] if d else []) if isinstance(d, str) else list(d)
 
 
 MODS = {"alt": 0x1, "ctrl": 0x2, "shift": 0x4, "win": 0x8}  # Win32 MOD_*
@@ -63,7 +68,8 @@ def _valid(key: str, v) -> bool:
         case "wrap":
             return type(v) is bool
         case "app_state_dir":
-            return isinstance(v, str)
+            return isinstance(v, str) or (isinstance(v, list) and bool(v)
+                                          and all(isinstance(d, str) and d for d in v))
         case "monitor":
             return isinstance(v, str) and bool(v)
         case "corner":
@@ -97,7 +103,7 @@ def load(p: Path | None = None) -> Config:
         elif not _valid(k, v):
             print(f"taskviewer-board: {p}: bad {k} = {v!r}; using default", file=sys.stderr)
         else:
-            kw[k] = tuple(v) if k == "offset" else float(v) if k in ("max_height", "opacity") else v
+            kw[k] = tuple(v) if k in ("offset", "app_state_dir") and isinstance(v, list) else float(v) if k in ("max_height", "opacity") else v
     return Config(**kw)
 
 

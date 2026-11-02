@@ -9,15 +9,15 @@ from taskviewer_client import start_app, state_dir
 RETRY = 2.0
 
 
-def events(topics: list[str], on_event, on_down, stop: threading.Event, start: bool = True):
+def events(topics: list[str], on_event, on_down, stop: threading.Event, start: bool = True, sdir=None):
     """Blocking loop: on_event(raw line) per push, on_down() when the App is unreachable.
 
-    start=False never launches an App (it runs elsewhere, e.g. in WSL).
+    start=False never launches an App (it runs elsewhere, e.g. in WSL). sdir: that App's state dir.
     """
     started = False
     while not stop.is_set():
         try:
-            port = int((state_dir() / "port").read_text())
+            port = int(((sdir or state_dir()) / "port").read_text())
             with socket.create_connection(("127.0.0.1", port), timeout=1.0) as sock:
                 sock.settimeout(None)
                 sock.sendall(json.dumps({"id": 1, "op": "subscribe", "topics": topics}).encode() + b"\n")
@@ -36,7 +36,7 @@ def events(topics: list[str], on_event, on_down, stop: threading.Event, start: b
         stop.wait(RETRY)
 
 
-def stream(on_snapshot, on_down, stop: threading.Event, on_glance=None, start: bool = True):
+def stream(on_snapshot, on_down, stop: threading.Event, on_glance=None, start: bool = True, sdir=None):
     """events() on the state topic (+ glance if on_glance), decoded; on_glance gets a {live, awaiting, blocked} dict."""
     import msgspec
 
@@ -49,10 +49,10 @@ def stream(on_snapshot, on_down, stop: threading.Event, on_glance=None, start: b
         elif isinstance(ev, p.GlanceEvent) and on_glance:
             on_glance(msgspec.structs.asdict(ev.glance))
 
-    events(["state", "glance"] if on_glance else ["state"], on_event, on_down, stop, start)
+    events(["state", "glance"] if on_glance else ["state"], on_event, on_down, stop, start, sdir)
 
 
-def run_in_thread(on_snapshot, on_down, on_glance=None, start: bool = True) -> threading.Event:
+def run_in_thread(on_snapshot, on_down, on_glance=None, start: bool = True, sdir=None) -> threading.Event:
     stop = threading.Event()
-    threading.Thread(target=stream, args=(on_snapshot, on_down, stop, on_glance, start), daemon=True).start()
+    threading.Thread(target=stream, args=(on_snapshot, on_down, stop, on_glance, start, sdir), daemon=True).start()
     return stop

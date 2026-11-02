@@ -76,7 +76,7 @@ def layout(snap: p.SnapshotView, collapsed: bool, home: str | None = None) -> li
     projects = sorted({t.project for t in snap.trees}, key=lambda pr: names[pr].lower())
     for pr in projects:
         rows.append(Row("project", names[pr]))
-        trees = sorted((t for t in snap.trees if t.project == pr), key=lambda t: int(t.id.lstrip("t")))
+        trees = sorted((t for t in snap.trees if t.project == pr), key=lambda t: int(t.id.rpartition("t")[2]))  # t12, or <App>/t12
         for t in trees:
             ss = by_tree.get(t.id, [])
             if any(s.activity == "awaiting" for s in ss):  # ⚠ replaces the status icon, line goes yellow
