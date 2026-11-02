@@ -196,8 +196,27 @@ app_state_dir = '\\wsl.localhost\Ubuntu\home\me\.local\state\taskviewer'
 
 Notes:
 - With `app_state_dir` set, the Board never starts an App itself. The Sessions in WSL start the WSL App, and until then the tray stays grey.
-- The Board shows one App. If you also run either assistant natively on Windows, those Sessions use a separate Windows App that this Board won't show.
+- The Board shows only the Apps listed in `app_state_dir`. If you also run either assistant natively on Windows, those Sessions use a separate Windows App that this Board won't show.
 - This relies on WSL2 forwarding localhost (the default). If the tray stays grey while Sessions run, check that `localhostForwarding` isn't turned off in `.wslconfig`.
+
+#### Several WSL distros
+
+Each distro runs its own App, because the App tracks Sessions by process id and distros can't see each other's processes. One Windows Board can show them all:
+
+1. Do step 1 in each distro, with its own clone.
+2. In each distro, print its state path with the step 3 command.
+3. List all the paths in `board.toml`:
+
+```toml
+app_state_dir = [
+  '\\wsl.localhost\Ubuntu\home\me\.local\state\taskviewer',
+  '\\wsl.localhost\Ubuntu-22.04\home\me\.local\state\taskviewer',
+]
+```
+
+4. Restart the Board (right-click the tray dot → Quit Board, then start any Session). Reload doesn't pick up a changed `app_state_dir`.
+
+Each Project heading gets its distro name, e.g. `TaskViewer · Ubuntu-22.04`, so the same folder in two distros stays separate. The tray counts every distro's Sessions, and its tooltip names any App that is down. It turns grey only when all of them are down.
 
 ### How it works
 
@@ -239,7 +258,7 @@ wrap = true             # long goals/titles wrap; false cuts them off with …
 hotkey_toggle = "ctrl+alt+t"
 hotkey_collapse = "ctrl+alt+shift+t"
 hotkey_reload = "ctrl+alt+r"
-app_state_dir = ""      # use an App elsewhere, e.g. in WSL (see WSL)
+app_state_dir = ""      # use an App elsewhere, e.g. in WSL, or a list of them (see WSL)
 ```
 
 After editing, reload the config (see the key tables above). You can also drag the Board anywhere; it remembers the spot per monitor until it restarts.
