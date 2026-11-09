@@ -1,17 +1,17 @@
 """Merge several Apps (e.g. one per WSL distro) into one Board feed. Qt-free."""
 
-import re
 import threading
 
 import msgspec
 
 import taskviewer_protocol as p
 
+from .feed import wsl_distro
+
 
 def label(state_dir: str) -> str:
     """Distro name for a \\\\wsl.localhost\\<distro>\\... (or \\\\wsl$\\) path, else the path itself."""
-    m = re.match(r"^[\\/]{2}wsl(?:\.localhost|\$)[\\/]([^\\/]+)", state_dir, re.IGNORECASE)
-    return m.group(1) if m else state_dir
+    return wsl_distro(state_dir) or state_dir
 
 
 def tag(snap: p.SnapshotView, lab: str) -> p.SnapshotView:
